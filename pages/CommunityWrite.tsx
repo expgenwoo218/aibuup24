@@ -4,7 +4,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import { VIP_CATEGORIES, BOARD_CATEGORIES } from '../constants';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
-import { generateAIReport } from '../lib/gemini';
 
 interface Message {
   id: number;
@@ -27,7 +26,7 @@ const CommunityWrite: React.FC = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, sender: 'bot', text: "환영합니다, 모험가님! 🦾 데이터 수집 센터에 오신 것을 환영합니다." },
-    { id: 2, sender: 'bot', text: "기록하고 싶은 주제를 선택해 주세요. 선택하신 주제에 맞춰 제가 질문을 드리고, 답변을 모아 전문적인 리포트를 작성해 드립니다." }
+    { id: 2, sender: 'bot', text: "기록하고 싶은 주제를 선택해 주세요. 선택하신 주제에 맞춰 제가 질문을 드리고, 답변을 모아 리포트를 작성해 드립니다." }
   ]);
   
   const [step, setStep] = useState<'SELECT' | 'CHATTING' | 'GENERATING' | 'DONE'>('SELECT');
@@ -84,51 +83,43 @@ const CommunityWrite: React.FC = () => {
         setIsBotTyping(false);
       }, 800);
     } else {
-      generateFinalReportWithAI(nextAnswers);
+      saveReportDirectly(nextAnswers);
     }
   };
 
-  const generateFinalReportWithAI = async (finalAnswers: string[]) => {
+  const saveReportDirectly = async (finalAnswers: string[]) => {
     setStep('GENERATING');
     setIsBotTyping(true);
     
-    const systemInstruction = `당신은 AI 부업 전문 분석가입니다. 사용자의 답변을 바탕으로 전문적이고 가독성이 뛰어난 마크다운 리포트를 작성하세요. 
-    리포트에는 [개요], [사용 툴 분석], [수익성 평가], [리스크 및 장단점], [총평] 섹션이 포함되어야 합니다. 
-    어조는 신뢰감 있고 날카로워야 합니다.`;
-    
-    const prompt = `사용자 카테고리: ${selectedCat}
-    답변 내용:
-    1. 제목: ${finalAnswers[0]}
-    2. 계기: ${finalAnswers[1]}
-    3. 도구: ${finalAnswers[2]}
-    4. 투자시간/비용: ${finalAnswers[3]}
-    5. 성과: ${finalAnswers[4]}
-    6. 추천이유/장단점: ${finalAnswers[5]}
-    7. 동료들에게: ${finalAnswers[6]}`;
+    // AI 대신 질문과 답변을 구조화된 마크다운으로 결합
+    let reportContent = `## 📊 부업 데이터 리포트\n\n`;
+    COMMON_QUESTIONS.forEach((question, index) => {
+      reportContent += `### 🔍 ${question}\n> ${finalAnswers[index] || '답변 없음'}\n\n`;
+    });
+
+    const postData = {
+      title: finalAnswers[0] || `[${selectedCat}] 데이터 리포트`,
+      author: profile?.nickname || user?.email?.split('@')[0] || '모험가',
+      category: selectedCat,
+      content: reportContent,
+      result: '기록 완료',
+      user_id: user?.id,
+      tool: finalAnswers[2],
+      daily_time: finalAnswers[3],
+      created_at: new Date().toISOString()
+    };
 
     try {
-      const aiReport = await generateAIReport(prompt, systemInstruction);
-      const postData = {
-        title: finalAnswers[0] || `[${selectedCat}] AI 분석 리포트`,
-        author: profile?.nickname || user?.email?.split('@')[0] || '모험가',
-        category: selectedCat,
-        content: aiReport,
-        result: 'AI 검증 완료',
-        user_id: user?.id,
-        tool: finalAnswers[2],
-        daily_time: finalAnswers[3],
-        created_at: new Date().toISOString()
-      };
-
       if (isConfigured) {
-        await supabase.from('posts').insert([postData]);
+        const { error } = await supabase.from('posts').insert([postData]);
+        if (error) throw error;
         refreshProfile();
       }
       setStep('DONE');
-      setTimeout(() => navigate(`/community?cat=${selectedCat}`), 1500);
+      setTimeout(() => navigate(`/community?cat=${selectedCat}`), 1000);
     } catch (err) {
-      console.error("AI Generation Error:", err);
-      alert("AI 리포트 생성 중 오류가 발생했습니다. 기본 형식으로 저장합니다.");
+      console.error("Save Error:", err);
+      alert("리포트 저장 중 오류가 발생했습니다.");
       navigate(`/community`);
     } finally {
       setIsBotTyping(false);
@@ -145,14 +136,14 @@ const CommunityWrite: React.FC = () => {
             </Link>
             <div className="flex items-center gap-3">
               <div className="size-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <span className="text-emerald-500 text-xs font-black">AI</span>
+                <span className="text-emerald-500 text-xs font-black">LOG</span>
               </div>
               <div>
                 <h2 className="text-white font-black text-sm uppercase tracking-tight">지능형 기록 도우미</h2>
                 <div className="flex items-center gap-1.5">
                   <span className={`size-1 rounded-full ${step === 'GENERATING' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
                   <p className={`text-[8px] font-black uppercase tracking-widest ${step === 'GENERATING' ? 'text-amber-500' : 'text-emerald-500/50'}`}>
-                    {step === 'GENERATING' ? 'Analysing Data...' : 'Standard Ready'}
+                    {step === 'GENERATING' ? 'Recording Data...' : 'Standard Ready'}
                   </p>
                 </div>
               </div>
@@ -200,7 +191,7 @@ const CommunityWrite: React.FC = () => {
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
-                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">전문 AI 리포트 생성 중...</span>}
+                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">리포트 아카이브 기록 중...</span>}
               </div>
             </div>
           )}

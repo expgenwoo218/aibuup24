@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
-import { generateAIReport } from '../lib/gemini';
 
 interface Message {
   id: number;
@@ -67,49 +66,42 @@ const ScamReportChat: React.FC = () => {
       setCurrentStep(nextStep);
       askQuestion(nextStep);
     } else {
-      handleFinalAISubmission(newAnswers);
+      handleFinalSubmissionDirectly(newAnswers);
     }
   };
 
-  const handleFinalAISubmission = async (finalAnswers: string[]) => {
+  const handleFinalSubmissionDirectly = async (finalAnswers: string[]) => {
     setIsSubmitting(true);
     setIsBotTyping(true);
     
-    const systemInstruction = `당신은 온라인 사기 및 허위 강의(강팔이) 전문 수사관입니다. 
-    제보자의 답변을 바탕으로 [피해 분석 리포트]를 작성하세요. 
-    섹션은 [사건 개요], [기망 수법 분석], [실제 피해 대조], [수사관의 한마디(주의점)]으로 구성하세요. 
-    어조는 매우 날카롭고 공익을 위하는 정의로운 톤이어야 합니다.`;
+    // AI 대신 질문과 답변을 구조화된 마크다운으로 결합
+    let reportContent = `## 🛡️ 강팔이 피해 제보 데이터\n\n`;
+    QUESTIONS.forEach((question, index) => {
+      reportContent += `### ❗ ${question}\n> ${finalAnswers[index] || '답변 없음'}\n\n`;
+    });
 
-    const prompt = `피해 부업: ${finalAnswers[0]}
-    비용: ${finalAnswers[1]}
-    내용: ${finalAnswers[2]}
-    약속: ${finalAnswers[3]}
-    실제결과: ${finalAnswers[4]}
-    의심지점: ${finalAnswers[5]}
-    핵심주의: ${finalAnswers[6]}
-    추가언급: ${finalAnswers[7]}`;
+    const postData = {
+      title: `[고발] ${finalAnswers[0]} 피해 사례 제보`,
+      author: profile?.nickname || '익명모험가',
+      category: '강팔이피해사례',
+      content: reportContent,
+      result: '피해 접수 완료',
+      cost: finalAnswers[1],
+      user_id: user?.id,
+      created_at: new Date().toISOString()
+    };
 
     try {
-      const aiScamReport = await generateAIReport(prompt, systemInstruction);
-      const postData = {
-        title: `[고발] ${finalAnswers[0]} 피해 사례 정밀 리포트`,
-        author: profile?.nickname || '익명모험가',
-        category: '강팔이피해사례',
-        content: aiScamReport,
-        result: '사기 주의보 발령',
-        cost: finalAnswers[1],
-        user_id: user?.id,
-        created_at: new Date().toISOString()
-      };
-
       if (isConfigured) {
-        await supabase.from('posts').insert([postData]);
+        const { error } = await supabase.from('posts').insert([postData]);
+        if (error) throw error;
         refreshProfile();
       }
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "정밀 분석이 완료되었습니다. 리포트를 게시판에 등록했습니다. 🛡️" }]);
-      setTimeout(() => navigate('/community?cat=강팔이피해사례'), 2000);
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "피해 데이터 접수가 완료되었습니다. 게시판에 등록했습니다. 🛡️" }]);
+      setTimeout(() => navigate('/community?cat=강팔이피해사례'), 1500);
     } catch (err) {
-      console.error("Scam AI Error:", err);
+      console.error("Save Error:", err);
+      alert("데이터 저장 중 오류가 발생했습니다.");
       navigate('/community');
     } finally {
       setIsBotTyping(false);
@@ -153,7 +145,7 @@ const ScamReportChat: React.FC = () => {
           <div className="flex gap-3">
             <input 
               ref={inputRef} type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isSubmitting ? "리포트 생성 중..." : "답변을 입력하세요..."} disabled={isSubmitting || isBotTyping}
+              placeholder={isSubmitting ? "데이터 기록 중..." : "답변을 입력하세요..."} disabled={isSubmitting || isBotTyping}
               className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-red-500/50"
             />
             <button onClick={handleSend} disabled={isSubmitting || !userInput.trim() || isBotTyping} className="size-14 rounded-2xl bg-red-500 text-white flex items-center justify-center hover:scale-105 transition-all shadow-xl disabled:opacity-30">
