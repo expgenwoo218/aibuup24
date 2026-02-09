@@ -1,8 +1,7 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@^2.45.0';
+import { createClient } from '@supabase/supabase-js';
 
 // Vite 환경 변수(import.meta.env)와 일반 환경 변수(process.env)를 모두 지원하도록 구성
-// Use 'as any' to bypass TypeScript errors when 'env' is not defined on ImportMeta
 const supabaseUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) || 
                     (typeof process !== 'undefined' && (process as any).env?.VITE_SUPABASE_URL) || 
                     '';

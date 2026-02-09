@@ -17,6 +17,7 @@ import Admin from './pages/Admin';
 import News from './pages/News';
 import NewsDetail from './pages/NewsDetail';
 import { supabase, isConfigured } from './lib/supabase';
+import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 export const UserContext = createContext<{user: any, profile: any, refreshProfile: () => void}>({user: null, profile: null, refreshProfile: () => {}});
 
@@ -104,13 +105,13 @@ const App: React.FC = () => {
     if (!isConfigured) return;
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
