@@ -37,12 +37,12 @@ const ScamReportChat: React.FC = () => {
         .eq('category', '강팔이피해사례')
         .order('order_index', { ascending: true });
       
-      const questions = (data && data.length > 0) 
+      const qs = (data && data.length > 0) 
         ? data.map(q => q.question_text) 
-        : ["부업명을 입력하세요.", "피해 내용을 입력하세요."];
+        : ["부업명을 적어주세요.", "피해 내용을 적어주세요."];
       
-      setDynamicQuestions(questions);
-      setTimeout(() => askQuestion(0, questions), 1000);
+      setDynamicQuestions(qs);
+      setTimeout(() => askQuestion(0, qs), 1000);
     } catch (e) {
       console.error(e);
     }
@@ -53,11 +53,11 @@ const ScamReportChat: React.FC = () => {
     if (!isBotTyping && !isSubmitting) inputRef.current?.focus();
   }, [messages, isBotTyping]);
 
-  const askQuestion = (index: number, questions: string[]) => {
+  const askQuestion = (index: number, qs: string[]) => {
     setIsBotTyping(true);
     setTimeout(() => {
       setIsBotTyping(false);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: questions[index] }]);
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: qs[index] }]);
     }, 1000);
   };
 
@@ -84,7 +84,7 @@ const ScamReportChat: React.FC = () => {
     
     let reportContent = `## 🛡️ 강팔이 피해 제보 데이터\n\n`;
     dynamicQuestions.forEach((question, index) => {
-      reportContent += `### ❗ ${question}\n> ${finalAnswers[index] || '답변 없음'}\n\n`;
+      reportContent += `### ❗ ${question}\n> ${finalAnswers[index] || 'No Response'}\n\n`;
     });
 
     const postData = {
@@ -92,7 +92,7 @@ const ScamReportChat: React.FC = () => {
       author: profile?.nickname || '익명모험가',
       category: '강팔이피해사례',
       content: reportContent,
-      result: '피해 접수 완료',
+      result: 'Investigation Initiated',
       cost: finalAnswers[1] || '0',
       user_id: user?.id,
       created_at: new Date().toISOString()
@@ -104,7 +104,7 @@ const ScamReportChat: React.FC = () => {
         if (error) throw error;
         refreshProfile();
       }
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "피해 데이터 접수가 완료되었습니다. 게시판에 등록했습니다. 🛡️" }]);
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "데이터 접수가 완료되었습니다. 정의를 위해 사용하겠습니다. 🛡️" }]);
       setTimeout(() => navigate('/community?cat=강팔이피해사례'), 1500);
     } catch (err) {
       console.error("Save Error:", err);
@@ -151,7 +151,7 @@ const ScamReportChat: React.FC = () => {
           <div className="flex gap-3">
             <input 
               ref={inputRef} type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isSubmitting ? "데이터 기록 중..." : "답변을 입력하세요..."} disabled={isSubmitting || isBotTyping}
+              placeholder={isSubmitting ? "Processing..." : "메시지 입력..."} disabled={isSubmitting || isBotTyping}
               className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-red-500/50"
             />
             <button onClick={handleSend} disabled={isSubmitting || !userInput.trim() || isBotTyping} className="size-14 rounded-2xl bg-red-500 text-white flex items-center justify-center hover:scale-105 transition-all shadow-xl disabled:opacity-30">

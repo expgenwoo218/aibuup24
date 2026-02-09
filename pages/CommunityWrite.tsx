@@ -49,17 +49,19 @@ const CommunityWrite: React.FC = () => {
     setIsBotTyping(true);
 
     try {
-      // DB에서 질문 페칭
-      const { data } = await supabase.from('chat_questions')
+      // DB에서 실시간 질문 페칭
+      const { data, error } = await supabase.from('chat_questions')
         .select('question_text')
         .eq('category', name)
         .order('order_index', { ascending: true });
       
-      const questions = (data && data.length > 0) 
-        ? data.map(q => q.question_text) 
-        : ["제목을 정해주세요.", "내용을 입력해주세요."]; // 폴백 질문
+      if (error) throw error;
 
-      setDynamicQuestions(questions);
+      const fetchedQuestions = (data && data.length > 0) 
+        ? data.map(q => q.question_text) 
+        : ["제목을 입력해주세요.", "상세 내용을 기록해주세요."]; // 기본 질문
+
+      setDynamicQuestions(fetchedQuestions);
       setStep('CHATTING');
       
       setTimeout(() => {
@@ -67,12 +69,13 @@ const CommunityWrite: React.FC = () => {
           ...prev,
           { id: Date.now(), sender: 'user', text: name },
           { id: Date.now() + 1, sender: 'bot', text: `감사합니다. [${name}] 분석을 시작합니다. 첫 번째 질문입니다.` },
-          { id: Date.now() + 2, sender: 'bot', text: questions[0] }
+          { id: Date.now() + 2, sender: 'bot', text: fetchedQuestions[0] }
         ]);
         setIsBotTyping(false);
       }, 800);
     } catch (e) {
-      console.error("Fetch questions error:", e);
+      console.error(e);
+      alert("질문을 불러오는 중 오류가 발생했습니다.");
       setIsBotTyping(false);
     }
   };
@@ -102,20 +105,20 @@ const CommunityWrite: React.FC = () => {
     setStep('GENERATING');
     setIsBotTyping(true);
     
-    let reportContent = `## 📊 부업 데이터 리포트\n\n`;
+    let reportContent = `## 📊 Intelligence Archive Report\n\n`;
     dynamicQuestions.forEach((question, index) => {
-      reportContent += `### 🔍 ${question}\n> ${finalAnswers[index] || '답변 없음'}\n\n`;
+      reportContent += `### 🔍 ${question}\n> ${finalAnswers[index] || 'No Data'}\n\n`;
     });
 
     const postData = {
-      title: finalAnswers[0] || `[${selectedCat}] 데이터 리포트`,
+      title: finalAnswers[0] || `[${selectedCat}] Data Entry`,
       author: profile?.nickname || user?.email?.split('@')[0] || '모험가',
       category: selectedCat,
       content: reportContent,
-      result: '기록 완료',
+      result: 'Archive Ready',
       user_id: user?.id,
-      tool: finalAnswers[2] || '기타',
-      daily_time: finalAnswers[3] || '정보 없음',
+      tool: finalAnswers[2] || 'System',
+      daily_time: finalAnswers[3] || 'N/A',
       created_at: new Date().toISOString()
     };
 
@@ -138,6 +141,7 @@ const CommunityWrite: React.FC = () => {
   return (
     <div className="min-h-screen bg-black flex flex-col pt-24 md:pt-32 pb-10">
       <div className="flex-1 max-w-2xl mx-auto w-full flex flex-col px-4 md:px-0 mb-4 overflow-hidden rounded-[2.5rem] md:rounded-[4rem] border border-white/5 bg-[#0a0a0a] shadow-2xl relative">
+        {/* 상단바 */}
         <div className="bg-[#111] p-6 border-b border-white/5 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <Link to="/community" className="text-gray-600 hover:text-white transition-colors">
@@ -152,7 +156,7 @@ const CommunityWrite: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <span className={`size-1 rounded-full ${step === 'GENERATING' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
                   <p className={`text-[8px] font-black uppercase tracking-widest ${step === 'GENERATING' ? 'text-amber-500' : 'text-emerald-500/50'}`}>
-                    {step === 'GENERATING' ? 'Recording Data...' : 'Standard Ready'}
+                    {step === 'GENERATING' ? 'Commiting...' : 'Live Link'}
                   </p>
                 </div>
               </div>
@@ -160,6 +164,7 @@ const CommunityWrite: React.FC = () => {
           </div>
         </div>
 
+        {/* 채팅 본문 */}
         <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 no-scrollbar min-h-[500px]">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'bot' ? 'justify-start' : 'justify-end'} animate-slideUp`}>
@@ -200,19 +205,19 @@ const CommunityWrite: React.FC = () => {
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
-                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">리포트 아카이브 기록 중...</span>}
               </div>
             </div>
           )}
           <div ref={chatEndRef} />
         </div>
 
+        {/* 입력창 */}
         {step === 'CHATTING' && (
           <div className="p-6 bg-[#111] border-t border-white/5">
             <div className="flex gap-3">
               <input 
                 ref={inputRef} type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} disabled={isBotTyping}
-                placeholder={isBotTyping ? "기다려주세요..." : "답변을 입력하고 Enter를 누르세요..."}
+                placeholder={isBotTyping ? "..." : "메시지를 입력하세요..."}
                 className="flex-1 bg-black border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-emerald-500/50"
               />
               <button onClick={handleSend} disabled={!userInput.trim() || isBotTyping} className="size-14 rounded-2xl bg-emerald-500 text-black flex items-center justify-center hover:scale-105 transition-all disabled:opacity-30">
