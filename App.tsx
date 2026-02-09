@@ -53,27 +53,27 @@ const Navbar = () => {
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-black/80 backdrop-blur-3xl border-b border-white/5 flex flex-col">
-      <div className="flex items-center justify-between px-6 md:px-12 pt-6 pb-2 w-full max-w-[1920px] mx-auto">
+      <div className="flex items-center justify-between px-4 md:px-12 pt-6 pb-2 w-full max-w-[1920px] mx-auto gap-2">
         <Link to="/" className="text-xl md:text-2xl font-black tracking-tighter text-white hover:text-emerald-400 transition-colors shrink-0">
           Ai BuUp
         </Link>
-        <div className="flex items-center gap-4 md:gap-8">
+        <div className="flex items-center gap-2 md:gap-8 overflow-hidden">
           {profile && (
-            <div className={`px-2 py-0.5 rounded-full text-[6px] font-black uppercase tracking-widest border ${
+            <div className={`px-1.5 py-0 rounded-md text-[6px] font-black uppercase tracking-tight border shrink-0 ${
               profile.role === 'ADMIN' ? 'bg-red-500/10 border-red-500/50 text-red-500' :
               profile.role === 'GOLD' ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-500' : 'bg-white/5 border-white/10 text-gray-500'
             }`}>
-              {profile.role} GRADE
+              {profile.role}
             </div>
           )}
-          <Link to="/contact" className="text-gray-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]">Contact</Link>
+          <Link to="/contact" className="text-gray-500 hover:text-white transition-colors text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Contact</Link>
           {user ? (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4 shrink-0">
               <span className="hidden sm:block text-[10px] text-gray-500 font-bold uppercase">{profile?.nickname || user.email?.split('@')[0]}</span>
-              <button onClick={handleLogout} className="bg-white/5 border border-white/10 text-gray-300 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-white hover:text-black transition-all">Logout</button>
+              <button onClick={handleLogout} className="bg-white/5 border border-white/10 text-gray-300 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-white hover:text-black transition-all">Logout</button>
             </div>
           ) : (
-            <Link to="/login" className="bg-emerald-500 hover:bg-emerald-400 text-black px-6 py-2 rounded-xl transition-all shadow-xl shadow-emerald-500/20 text-[11px] font-black uppercase">Login</Link>
+            <Link to="/login" className="bg-emerald-500 hover:bg-emerald-400 text-black px-4 md:px-6 py-2 rounded-xl transition-all shadow-xl shadow-emerald-500/20 text-[10px] font-black uppercase whitespace-nowrap">Login</Link>
           )}
         </div>
       </div>
