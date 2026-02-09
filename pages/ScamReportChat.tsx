@@ -53,12 +53,20 @@ const ScamReportChat: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
     if (!isBotTyping && !isSubmitting) {
-      setTimeout(scrollToBottom, 100);
+      inputRef.current?.focus();
     }
   }, [messages, isBotTyping]);
 
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
   };
 
   const askQuestion = (index: number, qs: string[]) => {
@@ -69,13 +77,18 @@ const ScamReportChat: React.FC = () => {
     }, 1000);
   };
 
-  const handleSend = () => {
+  const handleSend = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!userInput.trim() || isSubmitting || isBotTyping) return;
+    
     const currentInput = userInput;
     const newAnswers = [...answers, currentInput];
     setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: currentInput }]);
     setAnswers(newAnswers);
     setUserInput('');
+
+    // 전송 즉시 포커스 유지
+    inputRef.current?.focus();
 
     if (currentStep < dynamicQuestions.length - 1) {
       const nextStep = currentStep + 1;
@@ -142,7 +155,7 @@ const ScamReportChat: React.FC = () => {
         {/* 채팅 영역 */}
         <div 
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 no-scrollbar"
+          className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 no-scrollbar scroll-smooth"
         >
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'bot' ? 'justify-start' : 'justify-end'} animate-slideUp`}>
@@ -160,7 +173,7 @@ const ScamReportChat: React.FC = () => {
               </div>
             </div>
           )}
-          <div ref={chatEndRef} className="h-4" />
+          <div ref={chatEndRef} className="h-4 w-full" />
         </div>
 
         {/* 하단 고정 컨트롤 */}
@@ -177,26 +190,27 @@ const ScamReportChat: React.FC = () => {
             </div>
           )}
           
-          <div className="p-4 flex gap-3">
+          <form onSubmit={handleSend} className="p-4 flex gap-3">
             <input 
               ref={inputRef} 
               type="text" 
               value={userInput} 
               onChange={(e) => setUserInput(e.target.value)} 
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              onFocus={scrollToBottom}
+              onFocus={() => {
+                setTimeout(scrollToBottom, 300);
+              }}
               placeholder={isSubmitting ? "Processing..." : "내용을 입력하세요..."} 
               disabled={isSubmitting || isBotTyping}
               className="flex-1 bg-black/40 border border-white/10 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-red-500/50 transition-all"
             />
             <button 
-              onClick={handleSend} 
+              type="submit"
               disabled={isSubmitting || !userInput.trim() || isBotTyping} 
               className="size-12 md:size-14 rounded-xl bg-red-500 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-30"
             >
               <svg className="size-5 md:size-6" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
             </button>
-          </div>
+          </form>
         </div>
       </div>
     </div>

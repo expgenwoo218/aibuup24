@@ -35,16 +35,26 @@ const CommunityWrite: React.FC = () => {
     if (!user) navigate('/login');
   }, [user, navigate]);
 
+  // 스크롤 및 포커스 관리 로직 강화
   useEffect(() => {
     scrollToBottom();
-    if (step === 'CHATTING') {
-      // 키보드가 올라올 때의 딜레이를 고려하여 약간의 시간차를 두고 스크롤
-      setTimeout(scrollToBottom, 100);
+    if (step === 'CHATTING' && !isBotTyping) {
+      // 봇이 타이핑을 멈췄을 때나 메시지가 추가되었을 때 포커스 유지
+      inputRef.current?.focus();
     }
   }, [messages, step, isBotTyping]);
 
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    // 모바일 뷰포트 변화에 확실히 대응하기 위해 한 번 더 호출
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
   };
 
   const handleCategorySelect = async (name: string, isVip: boolean) => {
@@ -87,14 +97,19 @@ const CommunityWrite: React.FC = () => {
     }
   };
 
-  const handleSend = () => {
+  const handleSend = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!userInput.trim() || isBotTyping) return;
+    
     const currentInput = userInput;
     const nextAnswers = [...answers, currentInput];
     setAnswers(nextAnswers);
     setUserInput('');
     setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: currentInput }]);
     
+    // 전송 후 즉시 입력창 포커스 재부여 (키보드 유지)
+    inputRef.current?.focus();
+
     const nextIndex = currentQuestionIndex + 1;
     if (nextIndex < dynamicQuestions.length) {
       setIsBotTyping(true);
@@ -102,6 +117,8 @@ const CommunityWrite: React.FC = () => {
       setTimeout(() => {
         setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: dynamicQuestions[nextIndex] }]);
         setIsBotTyping(false);
+        // 봇 답변 후에도 포커스 유지
+        setTimeout(() => inputRef.current?.focus(), 50);
       }, 800);
     } else {
       saveReportDirectly(nextAnswers);
@@ -170,7 +187,7 @@ const CommunityWrite: React.FC = () => {
         {/* 채팅 영역 */}
         <div 
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 no-scrollbar"
+          className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 no-scrollbar scroll-smooth"
         >
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'bot' ? 'justify-start' : 'justify-end'} animate-slideUp`}>
@@ -214,7 +231,7 @@ const CommunityWrite: React.FC = () => {
               </div>
             </div>
           )}
-          <div ref={chatEndRef} className="h-4" />
+          <div ref={chatEndRef} className="h-4 w-full" />
         </div>
 
         {/* 하단 고정 입력 컨트롤 영역 */}
@@ -230,26 +247,28 @@ const CommunityWrite: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-4 flex gap-3">
+            <form onSubmit={handleSend} className="p-4 flex gap-3">
               <input 
                 ref={inputRef} 
                 type="text" 
                 value={userInput} 
                 onChange={(e) => setUserInput(e.target.value)} 
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()} 
                 disabled={isBotTyping}
-                onFocus={scrollToBottom}
+                onFocus={() => {
+                  // 포커스 시 약간의 지연 후 스크롤을 최하단으로 밀어줌
+                  setTimeout(scrollToBottom, 300);
+                }}
                 placeholder={isBotTyping ? "Syncing..." : "답변을 입력하세요..."}
                 className="flex-1 bg-black border border-white/10 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-emerald-500/50 transition-all"
               />
               <button 
-                onClick={handleSend} 
+                type="submit"
                 disabled={!userInput.trim() || isBotTyping} 
                 className="size-12 rounded-xl bg-emerald-500 text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg shadow-emerald-500/20"
               >
                 <svg className="size-5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
               </button>
-            </div>
+            </form>
           </div>
         )}
       </div>
