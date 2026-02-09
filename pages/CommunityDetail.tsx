@@ -6,6 +6,7 @@ import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 interface Comment {
   id: string;
@@ -150,7 +151,7 @@ const CommunityDetail: React.FC = () => {
 
   return (
     <div className="pt-24 md:pt-32 pb-32 min-h-screen bg-[#050505]">
-      <div className="max-w-5xl mx-auto px-6">
+      <div className="max-w-5xl mx-auto px-4 md:px-6">
         
         <div className="flex items-center justify-between mb-12">
           <Link to={`/community?cat=${post.category}`} className="group flex items-center gap-4 text-gray-500 hover:text-white transition-all">
@@ -171,9 +172,9 @@ const CommunityDetail: React.FC = () => {
           themeColor === 'red' ? 'border-red-500/20 shadow-[0_0_50px_rgba(239,68,68,0.05)]' :
           themeColor === 'yellow' ? 'border-yellow-500/20 shadow-[0_0_50px_rgba(234,179,8,0.05)]' :
           'border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.05)]'
-        } rounded-[3rem] md:rounded-[4rem] overflow-hidden mb-16 animate-slideUp`}>
+        } rounded-[2rem] md:rounded-[4rem] overflow-hidden mb-16 animate-slideUp`}>
           
-          <div className="p-8 md:p-16 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
+          <div className="p-6 md:p-16 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
             <div className="flex flex-wrap items-center gap-4 mb-10">
               <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl ${
                 themeColor === 'red' ? 'bg-red-500 text-black' :
@@ -186,35 +187,35 @@ const CommunityDetail: React.FC = () => {
               </span>
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-[1.1] mb-12 break-keep">
+            <h1 className="text-3xl md:text-6xl font-black tracking-tighter leading-[1.1] mb-12 break-words">
               {post.title}
             </h1>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-black/40 border border-white/5 p-6 rounded-3xl">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="bg-black/40 border border-white/5 p-4 md:p-6 rounded-2xl md:rounded-3xl">
                 <p className="text-gray-600 text-[9px] uppercase font-black tracking-widest mb-2">Auditor</p>
-                <p className="text-white font-bold text-sm truncate">{post.author}</p>
+                <p className="text-white font-bold text-xs md:text-sm truncate">{post.author}</p>
               </div>
-              <div className="bg-black/40 border border-white/5 p-6 rounded-3xl">
+              <div className="bg-black/40 border border-white/5 p-4 md:p-6 rounded-2xl md:rounded-3xl">
                 <p className="text-gray-600 text-[9px] uppercase font-black tracking-widest mb-2">Tool Used</p>
-                <p className="text-emerald-500 font-bold text-sm truncate">{post.tool || '전용 툴'}</p>
+                <p className="text-emerald-500 font-bold text-xs md:text-sm truncate">{post.tool || '전용 툴'}</p>
               </div>
-              <div className="bg-black/40 border border-white/5 p-6 rounded-3xl">
+              <div className="bg-black/40 border border-white/5 p-4 md:p-6 rounded-2xl md:rounded-3xl">
                 <p className="text-gray-600 text-[9px] uppercase font-black tracking-widest mb-2">Investment</p>
-                <p className="text-white font-bold text-sm">{post.cost || post.daily_time || 'N/A'}</p>
+                <p className="text-white font-bold text-xs md:text-sm">{post.cost || post.daily_time || 'N/A'}</p>
               </div>
-              <div className="bg-black/40 border border-white/5 p-6 rounded-3xl">
+              <div className="bg-black/40 border border-white/5 p-4 md:p-6 rounded-2xl md:rounded-3xl">
                 <p className="text-gray-600 text-[9px] uppercase font-black tracking-widest mb-2">Verdict</p>
-                <p className={`${themeColor === 'red' ? 'text-red-500' : 'text-emerald-400'} font-bold text-sm`}>
+                <p className={`${themeColor === 'red' ? 'text-red-500' : 'text-emerald-400'} font-bold text-xs md:text-sm`}>
                   {post.result || '분석 중'}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="p-8 md:p-16">
-            <div className="prose prose-invert prose-emerald max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <div className="p-6 md:p-16">
+            <div className="prose prose-invert prose-emerald max-w-none break-words">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                 {post.content}
               </ReactMarkdown>
             </div>
@@ -229,20 +230,20 @@ const CommunityDetail: React.FC = () => {
             <button 
               onClick={handleLike}
               disabled={isLiked || !user}
-              className={`group flex items-center gap-5 px-16 py-6 rounded-full border transition-all duration-500 ${
+              className={`group flex items-center gap-5 px-10 md:px-16 py-5 md:py-6 rounded-full border transition-all duration-500 ${
                 isLiked 
                   ? 'bg-emerald-500 border-emerald-500 text-black scale-105 shadow-[0_0_50px_rgba(16,185,129,0.3)]' 
                   : 'border-white/10 text-white hover:border-emerald-500/50 hover:bg-emerald-500/5'
               } disabled:cursor-not-allowed`}
             >
-              <span className={`text-3xl transition-transform ${isLiked ? 'scale-125' : 'group-hover:rotate-12'}`}>
+              <span className={`text-2xl md:text-3xl transition-transform ${isLiked ? 'scale-125' : 'group-hover:rotate-12'}`}>
                 {isLiked ? '🛡️' : '💎'}
               </span>
               <div className="text-left">
-                <div className="font-black text-sm uppercase tracking-widest">
+                <div className="font-black text-xs md:text-sm uppercase tracking-widest">
                   {isLiked ? 'Intelligence Verified' : 'Confirm Intelligence'}
                 </div>
-                <div className={`text-[10px] font-bold ${isLiked ? 'text-black/60' : 'text-gray-500'}`}>
+                <div className={`text-[9px] md:text-[10px] font-bold ${isLiked ? 'text-black/60' : 'text-gray-500'}`}>
                   Current Score: {likeCount}
                 </div>
               </div>
@@ -250,26 +251,25 @@ const CommunityDetail: React.FC = () => {
           </div>
         </article>
 
-        {/* 댓글 섹션 */}
         <section className="max-w-4xl mx-auto mt-20">
           <div className="flex items-center gap-4 mb-10">
-            <h3 className="text-2xl font-black uppercase italic tracking-tighter">Reconnaissance Logs</h3>
+            <h3 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Reconnaissance Logs</h3>
             <span className="text-emerald-500 font-bold text-sm px-3 py-1 bg-emerald-500/10 rounded-lg">{comments.length}</span>
           </div>
 
-          <form onSubmit={handleCommentSubmit} className="mb-16 bg-neutral-900/50 border border-white/5 p-8 rounded-[2rem] shadow-xl">
+          <form onSubmit={handleCommentSubmit} className="mb-16 bg-neutral-900/50 border border-white/5 p-6 md:p-8 rounded-[2rem] shadow-xl">
             <textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder={user ? "데이터에 대한 분석이나 추가 정보를 공유해 주세요." : "로그인이 필요한 기능입니다."}
               disabled={!user}
-              className="w-full bg-black/40 border border-white/10 rounded-2xl p-6 text-white outline-none focus:border-emerald-500/50 transition-all min-h-[120px] mb-6 resize-none"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 md:p-6 text-white outline-none focus:border-emerald-500/50 transition-all min-h-[120px] mb-6 resize-none"
             />
             <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={!newComment.trim() || !user}
-                className="bg-white text-black font-black px-10 py-4 rounded-xl hover:bg-emerald-500 transition-all uppercase text-[11px] tracking-widest disabled:opacity-30"
+                className="bg-white text-black font-black px-8 md:px-10 py-3 md:py-4 rounded-xl hover:bg-emerald-500 transition-all uppercase text-[10px] md:text-[11px] tracking-widest disabled:opacity-30"
               >
                 Post Log
               </button>
@@ -278,7 +278,7 @@ const CommunityDetail: React.FC = () => {
 
           <div className="space-y-6">
             {comments.length > 0 ? comments.map((comment) => (
-              <div key={comment.id} className="bg-neutral-900/30 border border-white/5 p-8 rounded-[2rem] transition-all hover:bg-white/[0.02]">
+              <div key={comment.id} className="bg-neutral-900/30 border border-white/5 p-6 md:p-8 rounded-[2rem] transition-all hover:bg-white/[0.02]">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <span className="text-white font-black text-sm">{comment.author_name}</span>
@@ -290,7 +290,7 @@ const CommunityDetail: React.FC = () => {
                     {new Date(comment.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                <p className="text-gray-400 text-sm leading-relaxed break-keep">
+                <p className="text-gray-400 text-sm leading-relaxed break-words">
                   {comment.text}
                 </p>
               </div>

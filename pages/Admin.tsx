@@ -95,7 +95,7 @@ const Admin: React.FC = () => {
       if (error) throw error;
       setPosts(posts.filter(p => p.id !== id));
     } catch (e) {
-      alert('삭제 실패');
+      alert('삭제 실패: 권한이 없거나 네트워크 오류입니다.');
     }
   };
 
@@ -133,12 +133,20 @@ const Admin: React.FC = () => {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+      // DB 업데이트 요청
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+
       if (error) throw error;
-      setProfiles(profiles.map(p => p.id === userId ? { ...p, role: newRole as any } : p));
-      alert('회원 등급이 변경되었습니다.');
+
+      // 로컬 상태 즉시 업데이트
+      setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole as any } : p));
+      alert(`회원 등급이 ${newRole} 등급으로 변경되었습니다.`);
     } catch (err: any) {
-      alert('등급 변경 실패: ' + err.message);
+      console.error('Role update error:', err);
+      alert('등급 변경 실패: ' + (err.message || '데이터베이스 권한 오류입니다. SQL 정책을 확인하세요.'));
     }
   };
 
@@ -150,17 +158,18 @@ const Admin: React.FC = () => {
     if (!window.confirm('정말로 이 회원을 강제 탈퇴시키겠습니까?\n작성한 모든 데이터에 접근이 제한될 수 있습니다.')) return;
 
     try {
-      // Supabase handles cascade deletes if configured correctly
+      // profiles 테이블에서 삭제 (CASCADE 설정에 의해 연관 데이터 자동 삭제 시도)
       const { error } = await supabase.from('profiles').delete().eq('id', userId);
       if (error) throw error;
-      setProfiles(profiles.filter(p => p.id !== userId));
+      
+      setProfiles(prev => prev.filter(p => p.id !== userId));
       alert('탈퇴 처리가 완료되었습니다.');
     } catch (err: any) {
       alert('탈퇴 처리 실패: ' + err.message);
     }
   };
 
-  if (loading) return <div className="text-center pt-48">Loading admin data...</div>;
+  if (loading) return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">LOADING ARCHIVES...</div>;
 
   return (
     <div className="min-h-screen bg-black pt-12 pb-32 px-6">
@@ -259,7 +268,7 @@ const Admin: React.FC = () => {
                             <select 
                               value={p.role}
                               onChange={(e) => updateUserRole(p.id, e.target.value)}
-                              className="bg-black border border-white/10 text-[10px] font-black uppercase text-gray-400 rounded-lg px-3 py-1.5 outline-none focus:border-emerald-500 transition-all"
+                              className="bg-black border border-white/10 text-[10px] font-black uppercase text-gray-400 rounded-lg px-3 py-1.5 outline-none focus:border-emerald-500 transition-all cursor-pointer"
                             >
                               <option value="SILVER">Silver</option>
                               <option value="GOLD">Gold</option>

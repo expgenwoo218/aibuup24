@@ -6,6 +6,7 @@ import { supabase, isConfigured } from '../lib/supabase';
 import { NewsItem } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 const NewsDetail: React.FC = () => {
   const { id } = useParams();
@@ -60,7 +61,7 @@ const NewsDetail: React.FC = () => {
 
   return (
     <div className="pt-12 pb-32 min-h-screen bg-black">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="max-w-4xl mx-auto px-4 md:px-6">
         <Link to="/news" className="group text-gray-500 hover:text-emerald-400 transition-colors mb-16 inline-flex items-center gap-3 font-black uppercase tracking-[0.2em] text-[10px]">
           <span className="group-hover:-translate-x-2 transition-transform">←</span> Back to Archive
         </Link>
@@ -72,7 +73,7 @@ const NewsDetail: React.FC = () => {
             </span>
             <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">{news.date}</span>
           </div>
-          <h1 className="text-4xl md:text-7xl font-black tracking-tighter leading-[1.1] break-keep">
+          <h1 className="text-3xl md:text-7xl font-black tracking-tighter leading-[1.1] break-words">
             {news.title}
           </h1>
           <div className="mt-12 flex items-center gap-6 border-t border-white/5 pt-12">
@@ -84,28 +85,28 @@ const NewsDetail: React.FC = () => {
           </div>
         </header>
 
-        <div className="rounded-[3.5rem] overflow-hidden mb-20 shadow-2xl border border-white/10 relative group">
+        <div className="rounded-[2rem] md:rounded-[3.5rem] overflow-hidden mb-16 md:mb-20 shadow-2xl border border-white/10 relative group">
           <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           <img src={news.image_url} alt={news.title} className="w-full h-auto object-cover max-h-[600px]" />
         </div>
 
         <div className="max-w-3xl mx-auto">
           <div className="prose prose-invert prose-emerald max-w-none">
-            <p className="text-2xl md:text-3xl text-gray-200 leading-snug mb-16 font-light italic border-l-4 border-emerald-500 pl-8 break-keep">
+            <p className="text-xl md:text-3xl text-gray-200 leading-snug mb-12 md:mb-16 font-light italic border-l-4 border-emerald-500 pl-6 md:pl-8 break-words whitespace-pre-wrap">
               {news.summary}
             </p>
-            <div className="text-lg md:text-xl text-gray-400 leading-relaxed font-light break-keep">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <div className="text-base md:text-xl text-gray-400 leading-relaxed font-light break-words">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                 {news.content}
               </ReactMarkdown>
             </div>
           </div>
 
-          <footer className="mt-32 pt-16 border-t border-white/10">
-            <div className="bg-neutral-900 border border-white/10 rounded-[3rem] p-10 md:p-20 text-center relative overflow-hidden group">
+          <footer className="mt-20 md:mt-32 pt-16 border-t border-white/10">
+            <div className="bg-neutral-900 border border-white/10 rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-20 text-center relative overflow-hidden group">
               <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <h4 className="text-2xl md:text-4xl font-black mb-6 tracking-tighter break-keep relative z-10">이 트렌드에 대해 질문이 있나요?</h4>
-              <p className="text-gray-400 mb-12 font-light text-lg break-keep relative z-10">커뮤니티의 전문가들이 실시간으로 답변해 드립니다.</p>
+              <h4 className="text-2xl md:text-4xl font-black mb-6 tracking-tighter break-words relative z-10">이 트렌드에 대해 질문이 있나요?</h4>
+              <p className="text-gray-400 mb-12 font-light text-base md:text-lg break-words relative z-10">커뮤니티의 전문가들이 실시간으로 답변해 드립니다.</p>
               <div className="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
                 <Link 
                   to="/community" 

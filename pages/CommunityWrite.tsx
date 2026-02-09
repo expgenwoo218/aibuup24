@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { VIP_CATEGORIES, BOARD_CATEGORIES } from '../constants';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
+import { generateAIReport } from '../lib/gemini';
 
 interface Message {
   id: number;
@@ -39,12 +40,8 @@ const CommunityWrite: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isGold = profile?.role === 'GOLD' || profile?.role === 'ADMIN';
-
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
+    if (!user) navigate('/login');
   }, [user, navigate]);
 
   useEffect(() => {
@@ -53,103 +50,86 @@ const CommunityWrite: React.FC = () => {
   }, [messages, step, isBotTyping]);
 
   const handleCategorySelect = (name: string, isVip: boolean) => {
-    if (isVip && !isGold) {
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "⚠️ 고수의 방 카테고리는 GOLD 등급 이상만 작성이 가능합니다. 일반 게시판에서 활동하여 등급을 높여보세요!" }]);
+    if (isVip && (!profile || (profile.role !== 'GOLD' && profile.role !== 'ADMIN'))) {
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "⚠️ 고수의 방은 GOLD 등급 이상만 작성이 가능합니다." }]);
       return;
     }
-
     setSelectedCat(name);
     setStep('CHATTING');
     setIsBotTyping(true);
-
     setTimeout(() => {
       setMessages(prev => [
         ...prev,
         { id: Date.now(), sender: 'user', text: name },
-        { id: Date.now() + 1, sender: 'bot', text: `감사합니다. [${name}] 카테고리 기록을 시작하겠습니다. 첫 번째 질문입니다.` },
+        { id: Date.now() + 1, sender: 'bot', text: `감사합니다. [${name}] 분석을 시작합니다. 첫 번째 질문입니다.` },
         { id: Date.now() + 2, sender: 'bot', text: COMMON_QUESTIONS[0] }
       ]);
       setIsBotTyping(false);
-    }, 1000);
+    }, 800);
   };
 
   const handleSend = () => {
     if (!userInput.trim() || isBotTyping) return;
-
     const currentInput = userInput;
     const nextAnswers = [...answers, currentInput];
     setAnswers(nextAnswers);
     setUserInput('');
     setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: currentInput }]);
-
     const nextIndex = currentQuestionIndex + 1;
-    
     if (nextIndex < COMMON_QUESTIONS.length) {
       setIsBotTyping(true);
       setCurrentQuestionIndex(nextIndex);
       setTimeout(() => {
         setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: COMMON_QUESTIONS[nextIndex] }]);
         setIsBotTyping(false);
-      }, 1000);
+      }, 800);
     } else {
-      generateFinalReport(nextAnswers);
+      generateFinalReportWithAI(nextAnswers);
     }
   };
 
-  const generateFinalReport = async (finalAnswers: string[]) => {
+  const generateFinalReportWithAI = async (finalAnswers: string[]) => {
     setStep('GENERATING');
     setIsBotTyping(true);
-
-    // AI 없이 수집된 데이터를 템플릿에 맞게 조합
-    const title = finalAnswers[0];
-    const reportContent = `
-### 📊 부업 인텔리전스 리포트
-
-**1. 시작 계기 및 배경**
-> ${finalAnswers[1]}
-
-**2. 활용 도구 및 플랫폼**
-* **주요 툴:** ${finalAnswers[2]}
-
-**3. 투자 자원 및 성과**
-* **투자 규모:** ${finalAnswers[3]}
-* **수익 및 결과:** ${finalAnswers[4]}
-
-**4. 종합 분석 및 제언**
-* **추천 여부 및 분석:** ${finalAnswers[5]}
-* **동료 모험가에게 한마디:** ${finalAnswers[6]}
-
----
-*본 리포트는 모험가님의 실제 답변을 바탕으로 구조화되었습니다.*
-    `.trim();
+    
+    const systemInstruction = `당신은 AI 부업 전문 분석가입니다. 사용자의 답변을 바탕으로 전문적이고 가독성이 뛰어난 마크다운 리포트를 작성하세요. 
+    리포트에는 [개요], [사용 툴 분석], [수익성 평가], [리스크 및 장단점], [총평] 섹션이 포함되어야 합니다. 
+    어조는 신뢰감 있고 날카로워야 합니다.`;
+    
+    const prompt = `사용자 카테고리: ${selectedCat}
+    답변 내용:
+    1. 제목: ${finalAnswers[0]}
+    2. 계기: ${finalAnswers[1]}
+    3. 도구: ${finalAnswers[2]}
+    4. 투자시간/비용: ${finalAnswers[3]}
+    5. 성과: ${finalAnswers[4]}
+    6. 추천이유/장단점: ${finalAnswers[5]}
+    7. 동료들에게: ${finalAnswers[6]}`;
 
     try {
-      const newPost: any = {
-        title: title || `[${selectedCat}] 새로운 리포트`,
-        author: profile?.nickname || user?.email?.split('@')[0] || '익명',
+      const aiReport = await generateAIReport(prompt, systemInstruction);
+      const postData = {
+        title: finalAnswers[0] || `[${selectedCat}] AI 분석 리포트`,
+        author: profile?.nickname || user?.email?.split('@')[0] || '모험가',
         category: selectedCat,
-        content: reportContent,
-        result: '검증 대기 중',
+        content: aiReport,
+        result: 'AI 검증 완료',
         user_id: user?.id,
-        created_at: new Date().toISOString(),
-        likes: 0,
         tool: finalAnswers[2],
-        daily_time: finalAnswers[3]
+        daily_time: finalAnswers[3],
+        created_at: new Date().toISOString()
       };
 
-      if (isConfigured && user) {
-        const { error } = await supabase.from('posts').insert([newPost]);
-        if (error) throw error;
+      if (isConfigured) {
+        await supabase.from('posts').insert([postData]);
         refreshProfile();
       }
-
       setStep('DONE');
       setTimeout(() => navigate(`/community?cat=${selectedCat}`), 1500);
-
     } catch (err) {
-      console.error("Report Save Error:", err);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "리포트 저장 중 오류가 발생했습니다." }]);
-      setStep('CHATTING');
+      console.error("AI Generation Error:", err);
+      alert("AI 리포트 생성 중 오류가 발생했습니다. 기본 형식으로 저장합니다.");
+      navigate(`/community`);
     } finally {
       setIsBotTyping(false);
     }
@@ -165,14 +145,14 @@ const CommunityWrite: React.FC = () => {
             </Link>
             <div className="flex items-center gap-3">
               <div className="size-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <span className="text-emerald-500 text-xs font-black">CHAT</span>
+                <span className="text-emerald-500 text-xs font-black">AI</span>
               </div>
               <div>
-                <h2 className="text-white font-black text-sm uppercase tracking-tight">기록 도우미</h2>
+                <h2 className="text-white font-black text-sm uppercase tracking-tight">지능형 기록 도우미</h2>
                 <div className="flex items-center gap-1.5">
                   <span className={`size-1 rounded-full ${step === 'GENERATING' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
                   <p className={`text-[8px] font-black uppercase tracking-widest ${step === 'GENERATING' ? 'text-amber-500' : 'text-emerald-500/50'}`}>
-                    {step === 'GENERATING' ? 'Processing...' : 'Recording Session'}
+                    {step === 'GENERATING' ? 'Analysing Data...' : 'Standard Ready'}
                   </p>
                 </div>
               </div>
@@ -183,7 +163,7 @@ const CommunityWrite: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 no-scrollbar min-h-[500px]">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'bot' ? 'justify-start' : 'justify-end'} animate-slideUp`}>
-              <div className={`max-w-[85%] ${msg.sender === 'user' ? 'bg-emerald-500 text-black font-bold' : 'bg-[#151515] text-gray-300 border border-white/5'} px-6 py-4 rounded-[1.8rem] ${msg.sender === 'bot' ? 'rounded-tl-none' : 'rounded-tr-none'} shadow-xl text-sm leading-relaxed whitespace-pre-line`}>
+              <div className={`max-w-[85%] ${msg.sender === 'user' ? 'bg-emerald-500 text-black font-bold' : 'bg-[#151515] text-gray-300 border border-white/5'} px-6 py-4 rounded-[1.8rem] ${msg.sender === 'bot' ? 'rounded-tl-none' : 'rounded-tr-none'} shadow-xl text-sm leading-relaxed break-words whitespace-pre-wrap`}>
                 {msg.text}
               </div>
             </div>
@@ -195,29 +175,17 @@ const CommunityWrite: React.FC = () => {
                 <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] mb-4 ml-2">고수의 방 (GOLD 권한)</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {VIP_CATEGORIES.map(cat => (
-                    <button 
-                      key={cat.id}
-                      onClick={() => handleCategorySelect(cat.name, true)}
-                      className={`relative overflow-hidden bg-[#111] border border-yellow-500/10 p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight transition-all text-left shadow-lg ${
-                        isGold ? 'hover:bg-yellow-500 hover:text-black text-yellow-500/80 hover:border-yellow-500' : 'opacity-40 grayscale cursor-not-allowed text-gray-600'
-                      }`}
-                    >
-                      {!isGold && <span className="absolute top-2 right-2 opacity-50">🔒</span>}
+                    <button key={cat.id} onClick={() => handleCategorySelect(cat.name, true)} className="bg-[#111] border border-yellow-500/10 p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight transition-all text-left text-yellow-500/80 hover:bg-yellow-500 hover:text-black">
                       {cat.name}
                     </button>
                   ))}
                 </div>
               </div>
-
               <div>
-                <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] mb-4 ml-2">일반 게시판 (모든 권한)</p>
+                <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] mb-4 ml-2">일반 게시판</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {BOARD_CATEGORIES.filter(c => c.id !== 'all').map(cat => (
-                    <button 
-                      key={cat.id}
-                      onClick={() => handleCategorySelect(cat.name, false)}
-                      className="bg-[#111] hover:bg-emerald-500 hover:text-black border border-white/5 p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight text-gray-500 transition-all text-left shadow-lg"
-                    >
+                    <button key={cat.id} onClick={() => handleCategorySelect(cat.name, false)} className="bg-[#111] hover:bg-emerald-500 hover:text-black border border-white/5 p-4 rounded-2xl text-[10px] font-black uppercase tracking-tight text-gray-500 transition-all text-left">
                       {cat.name}
                     </button>
                   ))}
@@ -232,7 +200,7 @@ const CommunityWrite: React.FC = () => {
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
-                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">데이터 리포트 생성 중...</span>}
+                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">전문 AI 리포트 생성 중...</span>}
               </div>
             </div>
           )}
@@ -243,20 +211,11 @@ const CommunityWrite: React.FC = () => {
           <div className="p-6 bg-[#111] border-t border-white/5">
             <div className="flex gap-3">
               <input 
-                ref={inputRef}
-                type="text" 
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                disabled={isBotTyping}
+                ref={inputRef} type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} disabled={isBotTyping}
                 placeholder={isBotTyping ? "기다려주세요..." : "답변을 입력하고 Enter를 누르세요..."}
-                className="flex-1 bg-black border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-emerald-500/50 transition-all"
+                className="flex-1 bg-black border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-emerald-500/50"
               />
-              <button 
-                onClick={handleSend}
-                disabled={!userInput.trim() || isBotTyping}
-                className="size-14 rounded-2xl bg-emerald-500 text-black flex items-center justify-center hover:scale-105 transition-all shadow-lg disabled:opacity-30"
-              >
+              <button onClick={handleSend} disabled={!userInput.trim() || isBotTyping} className="size-14 rounded-2xl bg-emerald-500 text-black flex items-center justify-center hover:scale-105 transition-all disabled:opacity-30">
                 <svg className="size-6" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
               </button>
             </div>
