@@ -27,6 +27,9 @@ const CommunityDetail: React.FC = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  const [prevPost, setPrevPost] = useState<{ id: string; title: string } | null>(null);
+  const [nextPost, setNextPost] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -50,6 +53,26 @@ const CommunityDetail: React.FC = () => {
       if (postData) {
         setPost(postData);
         setLikeCount(postData.likes || 0);
+
+        // 이전글 (더 오래된 글)
+        const { data: pData } = await supabase
+          .from('posts')
+          .select('id, title')
+          .lt('created_at', postData.created_at)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        setPrevPost(pData);
+
+        // 다음글 (더 최신 글)
+        const { data: nData } = await supabase
+          .from('posts')
+          .select('id, title')
+          .gt('created_at', postData.created_at)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        setNextPost(nData);
 
         const { data: commentData } = await supabase
           .from('comments')
@@ -250,6 +273,39 @@ const CommunityDetail: React.FC = () => {
             </button>
           </div>
         </article>
+
+        {/* 이전글 / 다음글 버튼 */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-20">
+          {prevPost ? (
+            <Link 
+              to={`/community/${prevPost.id}`} 
+              className="flex-1 group bg-neutral-900/50 border border-white/5 p-6 rounded-3xl transition-all hover:border-emerald-500/30"
+            >
+              <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Previous Post</div>
+              <div className="text-sm font-bold text-gray-400 group-hover:text-emerald-400 transition-colors line-clamp-1">{prevPost.title}</div>
+            </Link>
+          ) : (
+            <div className="flex-1 bg-neutral-900/10 border border-white/5 p-6 rounded-3xl opacity-30 cursor-not-allowed">
+              <div className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2">Previous Post</div>
+              <div className="text-sm font-bold text-gray-700 italic">No more logs.</div>
+            </div>
+          )}
+
+          {nextPost ? (
+            <Link 
+              to={`/community/${nextPost.id}`} 
+              className="flex-1 group bg-neutral-900/50 border border-white/5 p-6 rounded-3xl text-right transition-all hover:border-emerald-500/30"
+            >
+              <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Next Post</div>
+              <div className="text-sm font-bold text-gray-400 group-hover:text-emerald-400 transition-colors line-clamp-1">{nextPost.title}</div>
+            </Link>
+          ) : (
+            <div className="flex-1 bg-neutral-900/10 border border-white/5 p-6 rounded-3xl text-right opacity-30 cursor-not-allowed">
+              <div className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2">Next Post</div>
+              <div className="text-sm font-bold text-gray-700 italic">Latest log reached.</div>
+            </div>
+          )}
+        </div>
 
         <section className="max-w-4xl mx-auto mt-20">
           <div className="flex items-center gap-4 mb-10">
