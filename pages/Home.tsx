@@ -14,22 +14,39 @@ const Home: React.FC = () => {
 
   const fetchLatestNews = async () => {
     if (!isConfigured) return;
+    
+    // 1. 세션 캐시 확인 (속도 최적화 핵심)
+    const cachedNews = sessionStorage.getItem('cached_news_latest');
+    if (cachedNews) {
+      setNewsList(JSON.parse(cachedNews));
+    }
+
     try {
+      // 2. 필요한 필드만 최소한으로 요청
+      // Fix: Add 'content' to select to match NewsItem interface requirement
       const { data, error } = await supabase
         .from('news')
-        .select('*')
+        .select('id, title, category, date, summary, content, image_url')
         .order('created_at', { ascending: false })
         .limit(6);
       
       if (!error && data && data.length > 0) {
-        setNewsList(data);
+        // 이미지 URL 최적화 파라미터 추가 (w=600, q=75)
+        const optimizedData = data.map(item => ({
+          ...item,
+          image_url: item.image_url.includes('unsplash.com') 
+            ? `${item.image_url.split('?')[0]}?auto=format&fit=crop&q=75&w=600` 
+            : item.image_url
+        }));
+        setNewsList(optimizedData);
+        sessionStorage.setItem('cached_news_latest', JSON.stringify(optimizedData));
       }
     } catch (e) {
       console.warn("News fetch failed, staying with mock data");
     }
   };
 
-  const marqueeNews = [...newsList, ...newsList, ...newsList, ...newsList];
+  const marqueeNews = [...newsList, ...newsList]; // 마진 최소화를 위해 2배수만 사용
 
   const getBannerLink = (category: string) => {
     if (category === 'NEWS_PAGE') return '/news';
@@ -109,8 +126,8 @@ const Home: React.FC = () => {
                 to={`/news/${news.id}`}
                 className="w-[300px] md:w-[400px] mx-4 group relative rounded-[2rem] overflow-hidden bg-neutral-900 border border-white/10 hover:border-emerald-500/50 transition-all duration-500"
               >
-                <div className="h-48 md:h-56 overflow-hidden">
-                  <img src={news.image_url} alt={news.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                <div className="h-48 md:h-56 overflow-hidden bg-black">
+                  <img src={news.image_url} alt={news.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
                   <div className="absolute top-4 left-4">
                     <span className="bg-emerald-500 text-black text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
