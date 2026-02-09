@@ -14,42 +14,27 @@ const News: React.FC = () => {
   }, []);
 
   const fetchNews = async () => {
-    // 1. 캐시 먼저 로드 (시각적 대기 시간 제거)
-    const cached = sessionStorage.getItem('cached_news_full');
-    if (cached) {
-      setNews(JSON.parse(cached));
-      setLoading(false);
-    }
-
+    setLoading(true);
     if (!isConfigured) {
-      if (!cached) setNews(MOCK_NEWS);
+      setNews(MOCK_NEWS);
       setLoading(false);
       return;
     }
 
     try {
-      // Fix: Add 'content' to select to match NewsItem interface requirement
       const { data, error } = await supabase
         .from('news')
-        .select('id, title, category, date, summary, content, image_url') // 필요한 필드만 select
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       if (data && data.length > 0) {
-        // 이미지 URL 최적화
-        const optimizedData = data.map(item => ({
-          ...item,
-          image_url: item.image_url.includes('unsplash.com') 
-            ? `${item.image_url.split('?')[0]}?auto=format&fit=crop&q=75&w=800` 
-            : item.image_url
-        }));
-        setNews(optimizedData);
-        sessionStorage.setItem('cached_news_full', JSON.stringify(optimizedData));
-      } else if (!cached) {
+        setNews(data);
+      } else {
         setNews(MOCK_NEWS);
       }
     } catch (err) {
-      if (!cached) setNews(MOCK_NEWS);
+      setNews(MOCK_NEWS);
     } finally {
       setLoading(false);
     }
@@ -71,21 +56,21 @@ const News: React.FC = () => {
           </p>
         </header>
 
-        {loading && news.length === 0 ? (
+        {loading ? (
           <div className="py-24 text-center">
              <div className="size-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4" />
              <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">Updating Intelligence...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12 animate-fadeIn">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
             {news.map((n) => (
               <Link 
                 key={n.id} 
                 to={`/news/${n.id}`}
                 className="group flex flex-col bg-neutral-900 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-emerald-500/40 transition-all duration-500 shadow-2xl hover:shadow-emerald-500/10"
               >
-                <div className="relative h-64 overflow-hidden bg-black">
-                  <img src={n.image_url} alt={n.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-85 group-hover:opacity-100" />
+                <div className="relative h-64 overflow-hidden">
+                  <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
                   <div className="absolute top-6 left-6">
                     <span className="bg-emerald-500 text-black text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-xl">

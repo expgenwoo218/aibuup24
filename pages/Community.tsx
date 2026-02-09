@@ -21,7 +21,7 @@ const Community: React.FC = () => {
   useEffect(() => {
     fetchPosts();
     const handleScroll = () => setShowTopButton(window.scrollY > 400);
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -32,11 +32,9 @@ const Community: React.FC = () => {
     }
     setLoading(true);
     try {
-      // 목록 조회에 필요한 필수 필드만 select (성능 향상)
-      // Fix: Add 'content' to select to satisfy CommunityPost interface requirement
       const { data, error } = await supabase
         .from('posts')
-        .select('id, title, author, category, result, likes, created_at, content')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
