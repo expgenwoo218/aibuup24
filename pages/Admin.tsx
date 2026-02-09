@@ -36,6 +36,9 @@ const Admin: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Ai부업경험담');
   const [newQuestionText, setNewQuestionText] = useState('');
 
+  // 뉴스 프리뷰 상태
+  const [previewNews, setPreviewNews] = useState<NewsItem | null>(null);
+
   const allCategories = [...BOARD_CATEGORIES.map(c => c.name), ...VIP_CATEGORIES.map(v => v.name)].filter(n => n !== '전체');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -175,6 +178,7 @@ const Admin: React.FC = () => {
       const { error } = await supabase.from('news').delete().eq('id', id);
       if (error) throw error;
       setNews(news.filter(n => n.id !== id));
+      if (previewNews?.id === id) setPreviewNews(null);
     } catch (e) {
       alert('삭제 실패');
     }
@@ -224,7 +228,7 @@ const Admin: React.FC = () => {
     }
   };
 
-  if (loading && activeTab !== 'questions') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
+  if (loading && activeTab !== 'questions' && activeTab !== 'news') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
 
   return (
     <div className="min-h-screen bg-black pt-12 pb-32 px-6">
@@ -247,7 +251,7 @@ const Admin: React.FC = () => {
           <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>대화 질문 관리</button>
         </div>
 
-        {/* 질문 관리 탭 (새로 추가) */}
+        {/* 질문 관리 탭 */}
         {activeTab === 'questions' && (
           <div className="animate-fadeIn">
             <div className="flex flex-col md:flex-row gap-8">
@@ -315,7 +319,7 @@ const Admin: React.FC = () => {
           </div>
         )}
 
-        {/* 기존 탭들 (유지) */}
+        {/* 기존 탭들 */}
         {activeTab === 'posts' && (
           <div className="animate-fadeIn">
             <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest italic mb-6 px-4">Intelligence Archive ({posts.length})</h2>
@@ -401,8 +405,25 @@ const Admin: React.FC = () => {
 
         {activeTab === 'news' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn">
-            <div className="lg:col-span-1">
-              <div className="bg-neutral-900/40 border border-white/10 p-8 rounded-[2.5rem] sticky top-36 shadow-2xl">
+            <div className="lg:col-span-1 space-y-8">
+              {/* 프리뷰 영역 (선택 시 보임) */}
+              {previewNews && (
+                <div className="bg-[#0a0a0a] border border-emerald-500/30 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden animate-slideUp">
+                  <div className="flex justify-between items-start mb-6">
+                    <h3 className="text-lg font-black uppercase italic text-emerald-500">News Preview</h3>
+                    <button onClick={() => setPreviewNews(null)} className="text-gray-500 hover:text-white font-black text-xs uppercase">Close</button>
+                  </div>
+                  <div className="aspect-video w-full overflow-hidden rounded-2xl mb-6 bg-black border border-white/5">
+                    <img src={previewNews.image_url} alt={previewNews.title} className="w-full h-full object-cover" />
+                  </div>
+                  <h4 className="text-white font-black text-xl mb-4 leading-tight">{previewNews.title}</h4>
+                  <p className="text-gray-400 text-sm font-light leading-relaxed line-clamp-4 mb-6">{previewNews.summary}</p>
+                  <Link to={`/news/${previewNews.id}`} className="inline-block bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-3 rounded-xl font-black text-[10px] uppercase transition-all">Go to Detail →</Link>
+                </div>
+              )}
+
+              {/* 발행 폼 */}
+              <div className="bg-neutral-900/40 border border-white/10 p-8 rounded-[2.5rem] shadow-2xl">
                 <h2 className="text-xl font-black mb-8 uppercase italic flex items-center gap-3"> Publish News </h2>
                 <form onSubmit={handleCreateNews} className="space-y-5">
                   <div className="space-y-2">
@@ -448,21 +469,36 @@ const Admin: React.FC = () => {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-white/5 text-[10px] text-gray-600 uppercase font-black tracking-widest">
+                      <th className="px-8 py-6">Image</th>
                       <th className="px-8 py-6">News Feed</th>
                       <th className="px-8 py-6 text-right">Manage</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {news.map(n => (
-                      <tr key={n.id} className="group hover:bg-white/[0.02] transition-all">
+                      <tr key={n.id} 
+                        onClick={() => setPreviewNews(n)}
+                        className={`group cursor-pointer hover:bg-white/[0.03] transition-all ${previewNews?.id === n.id ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}
+                      >
+                        <td className="px-8 py-4 w-24">
+                          <div className="size-12 rounded-lg overflow-hidden border border-white/5 bg-black">
+                            <img src={n.image_url} alt={n.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </td>
                         <td className="px-8 py-6">
-                          <p className="font-bold text-sm text-white">{n.title}</p>
+                          <p className={`font-bold text-sm transition-colors ${previewNews?.id === n.id ? 'text-emerald-500' : 'text-white group-hover:text-emerald-400'}`}>{n.title}</p>
+                          <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mt-1">{n.category} • {n.date}</p>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <button onClick={() => deleteNews(n.id)} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase">Delete</button>
+                          <button onClick={(e) => { e.stopPropagation(); deleteNews(n.id); }} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase">Delete</button>
                         </td>
                       </tr>
                     ))}
+                    {news.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-8 py-20 text-center text-gray-600 text-[10px] font-black uppercase tracking-[0.4em]">No news items found.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
