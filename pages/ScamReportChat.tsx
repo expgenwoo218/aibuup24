@@ -10,17 +10,6 @@ interface Message {
   text: string;
 }
 
-const QUESTIONS = [
-  "실행한 부업명이 무엇인가요?",
-  "강의 비용은 얼마였나요?",
-  "강의에서 무엇을 배웠나요? 주요 커리큘럼을 알려주세요.",
-  "강팔이가 제시한 가장 달콤한 약속(수익 등)은 무엇이었나요?",
-  "실제로 실행했을 때 어떤 결과가 나왔나요?",
-  "강팔이의 주법 중 가장 의심스러운 부분은 무엇이었나요?",
-  "다른 피해자가 나오지 않도록 핵심 주의사항을 한 문장으로 정의한다면?",
-  "마지막으로 하고 싶은 말씀이 있다면 적어주세요."
-];
-
 const ScamReportChat: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useContext(UserContext);
@@ -28,6 +17,7 @@ const ScamReportChat: React.FC = () => {
     { id: 1, sender: 'bot', text: "안녕하세요. 강팔이 피해 사례 정밀 분석 채팅방입니다. 🛡️" },
     { id: 2, sender: 'bot', text: "당신의 소중한 경험 데이터는 제2의 피해자를 막는 강력한 증거가 됩니다." },
   ]);
+  const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [userInput, setUserInput] = useState('');
   const [answers, setAnswers] = useState<string[]>([]);
@@ -37,19 +27,37 @@ const ScamReportChat: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setTimeout(() => askQuestion(0), 1000);
+    fetchQuestions();
   }, []);
+
+  const fetchQuestions = async () => {
+    try {
+      const { data } = await supabase.from('chat_questions')
+        .select('question_text')
+        .eq('category', '강팔이피해사례')
+        .order('order_index', { ascending: true });
+      
+      const questions = (data && data.length > 0) 
+        ? data.map(q => q.question_text) 
+        : ["부업명을 입력하세요.", "피해 내용을 입력하세요."];
+      
+      setDynamicQuestions(questions);
+      setTimeout(() => askQuestion(0, questions), 1000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     if (!isBotTyping && !isSubmitting) inputRef.current?.focus();
   }, [messages, isBotTyping]);
 
-  const askQuestion = (index: number) => {
+  const askQuestion = (index: number, questions: string[]) => {
     setIsBotTyping(true);
     setTimeout(() => {
       setIsBotTyping(false);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: QUESTIONS[index] }]);
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: questions[index] }]);
     }, 1000);
   };
 
@@ -61,10 +69,10 @@ const ScamReportChat: React.FC = () => {
     setAnswers(newAnswers);
     setUserInput('');
 
-    if (currentStep < QUESTIONS.length - 1) {
+    if (currentStep < dynamicQuestions.length - 1) {
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
-      askQuestion(nextStep);
+      askQuestion(nextStep, dynamicQuestions);
     } else {
       handleFinalSubmissionDirectly(newAnswers);
     }
@@ -74,9 +82,8 @@ const ScamReportChat: React.FC = () => {
     setIsSubmitting(true);
     setIsBotTyping(true);
     
-    // AI 대신 질문과 답변을 구조화된 마크다운으로 결합
     let reportContent = `## 🛡️ 강팔이 피해 제보 데이터\n\n`;
-    QUESTIONS.forEach((question, index) => {
+    dynamicQuestions.forEach((question, index) => {
       reportContent += `### ❗ ${question}\n> ${finalAnswers[index] || '답변 없음'}\n\n`;
     });
 
@@ -86,7 +93,7 @@ const ScamReportChat: React.FC = () => {
       category: '강팔이피해사례',
       content: reportContent,
       result: '피해 접수 완료',
-      cost: finalAnswers[1],
+      cost: finalAnswers[1] || '0',
       user_id: user?.id,
       created_at: new Date().toISOString()
     };
@@ -101,7 +108,6 @@ const ScamReportChat: React.FC = () => {
       setTimeout(() => navigate('/community?cat=강팔이피해사례'), 1500);
     } catch (err) {
       console.error("Save Error:", err);
-      alert("데이터 저장 중 오류가 발생했습니다.");
       navigate('/community');
     } finally {
       setIsBotTyping(false);

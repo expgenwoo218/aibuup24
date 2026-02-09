@@ -11,16 +11,6 @@ interface Message {
   text: string;
 }
 
-const COMMON_QUESTIONS = [
-  "공유해주실 부업이나 프로젝트의 '제목'을 정해주세요.",
-  "이 부업을 시작하게 된 계기나 배경은 무엇인가요?",
-  "주로 어떤 도구(AI 툴, 플랫폼 등)를 사용하셨나요?",
-  "하루 평균 투자 시간과 월 발생 비용은 어느 정도인가요?",
-  "지금까지의 성과(수익이나 결과)를 솔직하게 알려주세요.",
-  "이 부업을 다른 분들에게 추천하시나요? 그 이유와 함께 장단점을 알려주세요.",
-  "마지막으로 이 길을 걷고자 하는 다른 모험가분들에게 한마디 부탁드립니다."
-];
-
 const CommunityWrite: React.FC = () => {
   const { user, profile, refreshProfile } = useContext(UserContext);
   const navigate = useNavigate();
@@ -31,6 +21,7 @@ const CommunityWrite: React.FC = () => {
   
   const [step, setStep] = useState<'SELECT' | 'CHATTING' | 'GENERATING' | 'DONE'>('SELECT');
   const [selectedCat, setSelectedCat] = useState('');
+  const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userInput, setUserInput] = useState('');
   const [answers, setAnswers] = useState<string[]>([]);
@@ -48,23 +39,42 @@ const CommunityWrite: React.FC = () => {
     if (step === 'CHATTING') inputRef.current?.focus();
   }, [messages, step, isBotTyping]);
 
-  const handleCategorySelect = (name: string, isVip: boolean) => {
+  const handleCategorySelect = async (name: string, isVip: boolean) => {
     if (isVip && (!profile || (profile.role !== 'GOLD' && profile.role !== 'ADMIN'))) {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "⚠️ 고수의 방은 GOLD 등급 이상만 작성이 가능합니다." }]);
       return;
     }
+
     setSelectedCat(name);
-    setStep('CHATTING');
     setIsBotTyping(true);
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev,
-        { id: Date.now(), sender: 'user', text: name },
-        { id: Date.now() + 1, sender: 'bot', text: `감사합니다. [${name}] 분석을 시작합니다. 첫 번째 질문입니다.` },
-        { id: Date.now() + 2, sender: 'bot', text: COMMON_QUESTIONS[0] }
-      ]);
+
+    try {
+      // DB에서 질문 페칭
+      const { data } = await supabase.from('chat_questions')
+        .select('question_text')
+        .eq('category', name)
+        .order('order_index', { ascending: true });
+      
+      const questions = (data && data.length > 0) 
+        ? data.map(q => q.question_text) 
+        : ["제목을 정해주세요.", "내용을 입력해주세요."]; // 폴백 질문
+
+      setDynamicQuestions(questions);
+      setStep('CHATTING');
+      
+      setTimeout(() => {
+        setMessages(prev => [
+          ...prev,
+          { id: Date.now(), sender: 'user', text: name },
+          { id: Date.now() + 1, sender: 'bot', text: `감사합니다. [${name}] 분석을 시작합니다. 첫 번째 질문입니다.` },
+          { id: Date.now() + 2, sender: 'bot', text: questions[0] }
+        ]);
+        setIsBotTyping(false);
+      }, 800);
+    } catch (e) {
+      console.error("Fetch questions error:", e);
       setIsBotTyping(false);
-    }, 800);
+    }
   };
 
   const handleSend = () => {
@@ -74,12 +84,13 @@ const CommunityWrite: React.FC = () => {
     setAnswers(nextAnswers);
     setUserInput('');
     setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: currentInput }]);
+    
     const nextIndex = currentQuestionIndex + 1;
-    if (nextIndex < COMMON_QUESTIONS.length) {
+    if (nextIndex < dynamicQuestions.length) {
       setIsBotTyping(true);
       setCurrentQuestionIndex(nextIndex);
       setTimeout(() => {
-        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: COMMON_QUESTIONS[nextIndex] }]);
+        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: dynamicQuestions[nextIndex] }]);
         setIsBotTyping(false);
       }, 800);
     } else {
@@ -91,9 +102,8 @@ const CommunityWrite: React.FC = () => {
     setStep('GENERATING');
     setIsBotTyping(true);
     
-    // AI 대신 질문과 답변을 구조화된 마크다운으로 결합
     let reportContent = `## 📊 부업 데이터 리포트\n\n`;
-    COMMON_QUESTIONS.forEach((question, index) => {
+    dynamicQuestions.forEach((question, index) => {
       reportContent += `### 🔍 ${question}\n> ${finalAnswers[index] || '답변 없음'}\n\n`;
     });
 
@@ -104,8 +114,8 @@ const CommunityWrite: React.FC = () => {
       content: reportContent,
       result: '기록 완료',
       user_id: user?.id,
-      tool: finalAnswers[2],
-      daily_time: finalAnswers[3],
+      tool: finalAnswers[2] || '기타',
+      daily_time: finalAnswers[3] || '정보 없음',
       created_at: new Date().toISOString()
     };
 
@@ -119,7 +129,6 @@ const CommunityWrite: React.FC = () => {
       setTimeout(() => navigate(`/community?cat=${selectedCat}`), 1000);
     } catch (err) {
       console.error("Save Error:", err);
-      alert("리포트 저장 중 오류가 발생했습니다.");
       navigate(`/community`);
     } finally {
       setIsBotTyping(false);
