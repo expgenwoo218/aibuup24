@@ -59,7 +59,7 @@ const Navbar = () => {
         </Link>
         <div className="flex items-center gap-4 md:gap-8">
           {profile && (
-            <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+            <div className={`px-2 py-0.5 rounded-full text-[6px] font-black uppercase tracking-widest border ${
               profile.role === 'ADMIN' ? 'bg-red-500/10 border-red-500/50 text-red-500' :
               profile.role === 'GOLD' ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-500' : 'bg-white/5 border-white/10 text-gray-500'
             }`}>

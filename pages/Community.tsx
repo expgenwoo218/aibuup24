@@ -250,6 +250,24 @@ const Community: React.FC = () => {
                 ))}
               </div>
             )}
+
+            {/* 리스트 하단 버튼 삽입 */}
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-8 pb-12">
+              <button 
+                onClick={handleDirectWriteClick}
+                className="w-full sm:w-auto flex items-center justify-center gap-3 bg-black border border-emerald-500/30 text-emerald-500 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-500 hover:text-black transition-all group shadow-xl"
+              >
+                <span className="text-xl">✍️</span>
+                직접 글쓰기
+              </button>
+              <button 
+                onClick={() => navigate('/community/write')}
+                className="w-full sm:w-auto flex items-center justify-center gap-3 bg-emerald-500 text-black px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white transition-all shadow-xl shadow-emerald-500/20 group"
+              >
+                <span className="text-xl">🤖</span>
+                대화하며 글쓰기
+              </button>
+            </div>
           </div>
         )}
       </div>

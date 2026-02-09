@@ -9,7 +9,7 @@ const News: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 6; // 요청에 따라 20개에서 6개로 변경
 
   useEffect(() => {
     fetchNews();
