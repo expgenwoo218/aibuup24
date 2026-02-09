@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { MOCK_NEWS } from '../constants';
 import { supabase, isConfigured } from '../lib/supabase';
@@ -8,6 +8,8 @@ import { NewsItem } from '../types';
 const News: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     fetchNews();
@@ -40,6 +42,12 @@ const News: React.FC = () => {
     }
   };
 
+  const totalPages = Math.ceil(news.length / itemsPerPage);
+  const currentPagedNews = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return news.slice(start, start + itemsPerPage);
+  }, [news, currentPage]);
+
   return (
     <div className="pt-12 pb-32 min-h-screen bg-black">
       <div className="max-w-7xl mx-auto px-6">
@@ -62,37 +70,60 @@ const News: React.FC = () => {
              <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">Updating Intelligence...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
-            {news.map((n) => (
-              <Link 
-                key={n.id} 
-                to={`/news/${n.id}`}
-                className="group flex flex-col bg-neutral-900 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-emerald-500/40 transition-all duration-500 shadow-2xl hover:shadow-emerald-500/10"
-              >
-                <div className="relative h-64 overflow-hidden">
-                  <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
-                  <div className="absolute top-6 left-6">
-                    <span className="bg-emerald-500 text-black text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-xl">
-                      {n.category}
-                    </span>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12 mb-16">
+              {currentPagedNews.map((n) => (
+                <Link 
+                  key={n.id} 
+                  to={`/news/${n.id}`}
+                  className="group flex flex-col bg-neutral-900 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-emerald-500/40 transition-all duration-500 shadow-2xl hover:shadow-emerald-500/10"
+                >
+                  <div className="relative h-64 overflow-hidden">
+                    <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
+                    <div className="absolute top-6 left-6">
+                      <span className="bg-emerald-500 text-black text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-xl">
+                        {n.category}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="p-10 flex-1 flex flex-col">
-                  <div className="text-gray-500 text-[10px] font-bold mb-4 uppercase tracking-[0.2em]">{n.date}</div>
-                  <h3 className="text-2xl md:text-3xl font-black mb-6 leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2">
-                    {n.title}
-                  </h3>
-                  <p className="text-gray-400 text-sm md:text-base font-light line-clamp-3 mb-10 leading-relaxed break-keep">
-                    {n.summary}
-                  </p>
-                  <div className="mt-auto flex items-center gap-3 text-xs font-black uppercase tracking-widest text-emerald-500 group-hover:gap-5 transition-all">
-                    View Detail <span>→</span>
+                  <div className="p-10 flex-1 flex flex-col">
+                    <div className="text-gray-500 text-[10px] font-bold mb-4 uppercase tracking-[0.2em]">{n.date}</div>
+                    <h3 className="text-2xl md:text-3xl font-black mb-6 leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2">
+                      {n.title}
+                    </h3>
+                    <p className="text-gray-400 text-sm md:text-base font-light line-clamp-3 mb-10 leading-relaxed break-keep">
+                      {n.summary}
+                    </p>
+                    <div className="mt-auto flex items-center gap-3 text-xs font-black uppercase tracking-widest text-emerald-500 group-hover:gap-5 transition-all">
+                      View Detail <span>→</span>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+                </Link>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                  <button
+                    key={pageNum}
+                    onClick={() => {
+                      setCurrentPage(pageNum);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`size-10 md:size-12 rounded-xl font-black text-sm transition-all border ${
+                      currentPage === pageNum 
+                        ? 'bg-emerald-500 border-emerald-500 text-black shadow-lg shadow-emerald-500/20' 
+                        : 'border-white/5 text-gray-500 hover:text-white hover:border-white/20 hover:bg-white/5'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

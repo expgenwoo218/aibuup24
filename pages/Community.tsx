@@ -16,7 +16,7 @@ const Community: React.FC = () => {
   const currentCategory = searchParams.get('cat') || '전체';
   
   const [currentPage, setCurrentPage] = useState(1);
-  const postsPerPage = 10;
+  const postsPerPage = 20;
 
   useEffect(() => {
     fetchPosts();
@@ -235,7 +235,10 @@ const Community: React.FC = () => {
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
                   <button
                     key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
+                    onClick={() => {
+                      setCurrentPage(pageNum);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     className={`size-10 md:size-12 rounded-xl font-black text-sm transition-all border ${
                       currentPage === pageNum 
                         ? 'bg-emerald-500 border-emerald-500 text-black shadow-lg shadow-emerald-500/20' 

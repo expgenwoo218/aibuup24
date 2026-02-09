@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
 import { CommunityPost, NewsItem } from '../types';
@@ -31,6 +31,10 @@ const Admin: React.FC = () => {
   const [isPublishing, setIsPublishing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'news' | 'questions'>('posts');
   
+  // 페이지네이션 상태 (30개 단위로 변경)
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
+
   // 질문 관리용 상태
   const [questions, setQuestions] = useState<ChatQuestion[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Ai부업경험담');
@@ -66,6 +70,7 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
     fetchAdminData();
+    setCurrentPage(1); // 탭 변경 시 페이지 리셋
   }, [activeTab, selectedCategory]);
 
   const fetchAdminData = async () => {
@@ -93,6 +98,42 @@ const Admin: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 각 데이터별 페이지네이션 계산 (itemsPerPage = 30 적용)
+  const currentPagedPosts = useMemo(() => posts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [posts, currentPage]);
+  const currentPagedUsers = useMemo(() => profiles.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [profiles, currentPage]);
+  const currentPagedNews = useMemo(() => news.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [news, currentPage]);
+
+  const totalPages = useMemo(() => {
+    if (activeTab === 'posts') return Math.ceil(posts.length / itemsPerPage);
+    if (activeTab === 'users') return Math.ceil(profiles.length / itemsPerPage);
+    if (activeTab === 'news') return Math.ceil(news.length / itemsPerPage);
+    return 0;
+  }, [posts, profiles, news, activeTab]);
+
+  const PaginationUI = () => {
+    if (totalPages <= 1) return null;
+    return (
+      <div className="flex justify-center items-center gap-2 mt-12 pb-8">
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+          <button
+            key={pageNum}
+            onClick={() => {
+              setCurrentPage(pageNum);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`size-10 rounded-xl font-black text-xs transition-all border ${
+              currentPage === pageNum 
+                ? 'bg-emerald-500 border-emerald-500 text-black shadow-lg shadow-emerald-500/20' 
+                : 'border-white/5 text-gray-500 hover:text-white hover:border-white/20 hover:bg-white/5'
+            }`}
+          >
+            {pageNum}
+          </button>
+        ))}
+      </div>
+    );
   };
 
   // 질문 관리 CRUD
@@ -319,7 +360,7 @@ const Admin: React.FC = () => {
           </div>
         )}
 
-        {/* 기존 탭들 */}
+        {/* 게시글 관리 */}
         {activeTab === 'posts' && (
           <div className="animate-fadeIn">
             <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest italic mb-6 px-4">Intelligence Archive ({posts.length})</h2>
@@ -334,7 +375,7 @@ const Admin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {posts.map(post => (
+                  {currentPagedPosts.map(post => (
                     <tr key={post.id} className="hover:bg-white/[0.02] transition-colors group">
                       <td className="px-8 py-6">
                         <Link to={`/community/${post.id}`} className="font-bold text-sm line-clamp-1 hover:text-emerald-400 transition-colors">{post.title}</Link>
@@ -350,10 +391,12 @@ const Admin: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              <PaginationUI />
             </div>
           </div>
         )}
 
+        {/* 회원 관리 */}
         {activeTab === 'users' && (
           <div className="animate-fadeIn">
             <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest italic mb-6 px-4">Member Directory ({profiles.length})</h2>
@@ -368,7 +411,7 @@ const Admin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {profiles.map(p => (
+                  {currentPagedUsers.map(p => (
                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-8 py-6">
                         <div className="flex flex-col">
@@ -399,10 +442,12 @@ const Admin: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              <PaginationUI />
             </div>
           </div>
         )}
 
+        {/* 뉴스피드 관리 */}
         {activeTab === 'news' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn">
             <div className="lg:col-span-1 space-y-8">
@@ -475,7 +520,7 @@ const Admin: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {news.map(n => (
+                    {currentPagedNews.map(n => (
                       <tr key={n.id} 
                         onClick={() => setPreviewNews(n)}
                         className={`group cursor-pointer hover:bg-white/[0.03] transition-all ${previewNews?.id === n.id ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}
@@ -501,6 +546,7 @@ const Admin: React.FC = () => {
                     )}
                   </tbody>
                 </table>
+                <PaginationUI />
               </div>
             </div>
           </div>
