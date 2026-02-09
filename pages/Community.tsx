@@ -135,15 +135,15 @@ const Community: React.FC = () => {
           <div className="relative group overflow-hidden rounded-[2.5rem] bg-neutral-900 border border-emerald-500/20 p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 transition-all hover:border-emerald-500/50">
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative z-10 text-center md:text-left">
-              <span className="inline-block px-3 py-1 bg-emerald-500 text-black text-[9px] font-black rounded-full uppercase tracking-widest mb-4">AI Chat Assistant</span>
-              <h3 className="text-2xl md:text-3xl font-black mb-2 tracking-tight">모든 부업 데이터, <span className="text-emerald-400">AI와 대화하며</span> 기록하세요.</h3>
-              <p className="text-gray-500 text-sm font-medium italic">번거로운 폼 입력 대신 AI 질문에 답하기만 하면 리포트가 완성됩니다.</p>
+              <span className="inline-block px-3 py-1 bg-emerald-500 text-black text-[9px] font-black rounded-full uppercase tracking-widest mb-4">Chat Assistant</span>
+              <h3 className="text-2xl md:text-3xl font-black mb-2 tracking-tight">모든 부업 데이터, <span className="text-emerald-400">대화하며 편하게</span> 기록하세요.</h3>
+              <p className="text-gray-500 text-sm font-medium italic">번거로운 폼 입력 대신 질문에 답하기만 하면 리포트가 완성됩니다.</p>
             </div>
             <button 
               onClick={() => navigate('/community/write')}
               className="relative z-10 bg-emerald-500 text-black px-12 py-5 rounded-2xl font-black text-xl hover:scale-105 transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)] flex items-center gap-4 group/btn"
             >
-              AI 글쓰기 시작 
+              대화하며 글쓰기 시작 
               <span className="group-hover/btn:translate-x-2 transition-transform">→</span>
             </button>
           </div>

@@ -4,7 +4,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import { VIP_CATEGORIES, BOARD_CATEGORIES } from '../constants';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
-import { GoogleGenAI, Chat } from "@google/genai";
 
 interface Message {
   id: number;
@@ -12,19 +11,30 @@ interface Message {
   text: string;
 }
 
+const COMMON_QUESTIONS = [
+  "공유해주실 부업이나 프로젝트의 '제목'을 정해주세요.",
+  "이 부업을 시작하게 된 계기나 배경은 무엇인가요?",
+  "주로 어떤 도구(AI 툴, 플랫폼 등)를 사용하셨나요?",
+  "하루 평균 투자 시간과 월 발생 비용은 어느 정도인가요?",
+  "지금까지의 성과(수익이나 결과)를 솔직하게 알려주세요.",
+  "이 부업을 다른 분들에게 추천하시나요? 그 이유와 함께 장단점을 알려주세요.",
+  "마지막으로 이 길을 걷고자 하는 다른 모험가분들에게 한마디 부탁드립니다."
+];
+
 const CommunityWrite: React.FC = () => {
   const { user, profile, refreshProfile } = useContext(UserContext);
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([
-    { id: 1, sender: 'bot', text: "환영합니다, 모험가님! 🦾 AI 데이터 수집 센터에 오신 것을 환영합니다." },
-    { id: 2, sender: 'bot', text: "기록하고 싶은 주제를 선택해 주세요. 선택하신 주제에 맞춰 제가 직접 실시간 심층 인터뷰를 진행하여 고품질 리포트를 작성해 드립니다." }
+    { id: 1, sender: 'bot', text: "환영합니다, 모험가님! 🦾 데이터 수집 센터에 오신 것을 환영합니다." },
+    { id: 2, sender: 'bot', text: "기록하고 싶은 주제를 선택해 주세요. 선택하신 주제에 맞춰 제가 질문을 드리고, 답변을 모아 전문적인 리포트를 작성해 드립니다." }
   ]);
   
   const [step, setStep] = useState<'SELECT' | 'CHATTING' | 'GENERATING' | 'DONE'>('SELECT');
   const [selectedCat, setSelectedCat] = useState('');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userInput, setUserInput] = useState('');
+  const [answers, setAnswers] = useState<string[]>([]);
   const [isBotTyping, setIsBotTyping] = useState(false);
-  const [chatSession, setChatSession] = useState<Chat | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,15 +52,9 @@ const CommunityWrite: React.FC = () => {
     if (step === 'CHATTING') inputRef.current?.focus();
   }, [messages, step, isBotTyping]);
 
-  const handleCategorySelect = async (name: string, isVip: boolean) => {
+  const handleCategorySelect = (name: string, isVip: boolean) => {
     if (isVip && !isGold) {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "⚠️ 고수의 방 카테고리는 GOLD 등급 이상만 작성이 가능합니다. 일반 게시판에서 활동하여 등급을 높여보세요!" }]);
-      return;
-    }
-
-    // Use process.env.API_KEY exclusively as per guidelines and to fix import.meta error
-    if (!process.env.API_KEY) {
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "❌ AI 키가 설정되지 않았습니다. Cloudflare 설정에서 API_KEY를 확인하세요." }]);
       return;
     }
 
@@ -58,104 +62,79 @@ const CommunityWrite: React.FC = () => {
     setStep('CHATTING');
     setIsBotTyping(true);
 
-    try {
-      // Initialize with process.env.API_KEY directly as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const chat = ai.chats.create({
-        model: 'gemini-3-flash-preview',
-        config: {
-          systemInstruction: `
-            당신은 AI 부업 검증 플랫폼 'Ai BuUp'의 수석 분석 에이전트입니다.
-            현재 사용자는 '${name}' 카테고리에 대한 정보를 공유하려고 합니다.
-            목표: 사용자의 부업 경험에서 '진짜 데이터'를 추출하기 위해 날카로운 질문을 던지세요.
-            한 번에 하나의 질문만 하세요. 질문은 구체적이어야 합니다.
-            수익성, 투입 시간, 리스크 등을 파고드세요.
-            충분한 정보가 모였다면 메시지 끝에 반드시 "[REPORT_READY]" 태그를 붙이세요.
-            말투는 냉철하고 지적인 AI 감사관 톤을 유지하세요.
-          `,
-        },
-      });
-
-      setChatSession(chat);
-      
-      const response = await chat.sendMessage({ message: `안녕하세요. [${name}] 카테고리에 대한 인터뷰를 시작하겠습니다. 해당 주제에 대해 본인이 경험하거나 알고 있는 내용을 간단히 설명해 주세요.` });
-      const botText = response.text || "AI 분석 모듈 가동 준비 완료. 답변을 기다립니다.";
-      
+    setTimeout(() => {
       setMessages(prev => [
         ...prev,
         { id: Date.now(), sender: 'user', text: name },
-        { id: Date.now() + 1, sender: 'bot', text: botText }
+        { id: Date.now() + 1, sender: 'bot', text: `감사합니다. [${name}] 카테고리 기록을 시작하겠습니다. 첫 번째 질문입니다.` },
+        { id: Date.now() + 2, sender: 'bot', text: COMMON_QUESTIONS[0] }
       ]);
-    } catch (err) {
-      console.error("AI Init Error:", err);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "❌ AI 모듈 초기화 실패. API 키 권한이나 할당량을 확인하세요." }]);
-      setStep('SELECT');
-    } finally {
       setIsBotTyping(false);
-    }
+    }, 1000);
   };
 
-  const handleSend = async () => {
-    if (!userInput.trim() || isBotTyping || !chatSession) return;
+  const handleSend = () => {
+    if (!userInput.trim() || isBotTyping) return;
 
     const currentInput = userInput;
+    const nextAnswers = [...answers, currentInput];
+    setAnswers(nextAnswers);
     setUserInput('');
     setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: currentInput }]);
-    setIsBotTyping(true);
 
-    try {
-      const response = await chatSession.sendMessage({ message: currentInput });
-      const botText = response.text || "";
-
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: botText }]);
-
-      if (botText.includes("[REPORT_READY]")) {
-        setTimeout(() => generateFinalReport(), 1000);
-      }
-    } catch (err) {
-      console.error("AI Chat Error:", err);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "메시지 전송 중 오류가 발생했습니다." }]);
-    } finally {
-      setIsBotTyping(false);
+    const nextIndex = currentQuestionIndex + 1;
+    
+    if (nextIndex < COMMON_QUESTIONS.length) {
+      setIsBotTyping(true);
+      setCurrentQuestionIndex(nextIndex);
+      setTimeout(() => {
+        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: COMMON_QUESTIONS[nextIndex] }]);
+        setIsBotTyping(false);
+      }, 1000);
+    } else {
+      generateFinalReport(nextAnswers);
     }
   };
 
-  const generateFinalReport = async () => {
+  const generateFinalReport = async (finalAnswers: string[]) => {
     setStep('GENERATING');
     setIsBotTyping(true);
 
+    // AI 없이 수집된 데이터를 템플릿에 맞게 조합
+    const title = finalAnswers[0];
+    const reportContent = `
+### 📊 부업 인텔리전스 리포트
+
+**1. 시작 계기 및 배경**
+> ${finalAnswers[1]}
+
+**2. 활용 도구 및 플랫폼**
+* **주요 툴:** ${finalAnswers[2]}
+
+**3. 투자 자원 및 성과**
+* **투자 규모:** ${finalAnswers[3]}
+* **수익 및 결과:** ${finalAnswers[4]}
+
+**4. 종합 분석 및 제언**
+* **추천 여부 및 분석:** ${finalAnswers[5]}
+* **동료 모험가에게 한마디:** ${finalAnswers[6]}
+
+---
+*본 리포트는 모험가님의 실제 답변을 바탕으로 구조화되었습니다.*
+    `.trim();
+
     try {
-      // Initialize with process.env.API_KEY directly as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const history = messages.map(m => `${m.sender === 'bot' ? '에이전트' : '사용자'}: ${m.text}`).join('\n');
-      
-      const prompt = `
-        다음 대화 데이터를 바탕으로 '${selectedCat}' 카테고리에 등록될 최종 '인텔리전스 리포트'를 마크다운으로 작성하세요.
-        최상단에 "TITLE: [제목]" 형식으로 제목을 포함할 것.
-
-        대화 내용:
-        ${history}
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-      });
-
-      const aiText = response.text || "";
-      const titleMatch = aiText.match(/TITLE:\s*(.*)/i);
-      const generatedTitle = titleMatch ? titleMatch[1].trim() : `[${selectedCat}] 분석 리포트`;
-      const cleanedContent = aiText.replace(/TITLE:.*\n?/i, '').trim();
-
       const newPost: any = {
-        title: generatedTitle,
+        title: title || `[${selectedCat}] 새로운 리포트`,
         author: profile?.nickname || user?.email?.split('@')[0] || '익명',
         category: selectedCat,
-        content: cleanedContent,
-        result: 'AI 정밀 분석 완료',
+        content: reportContent,
+        result: '검증 대기 중',
         user_id: user?.id,
         created_at: new Date().toISOString(),
-        likes: 0
+        likes: 0,
+        tool: finalAnswers[2],
+        daily_time: finalAnswers[3]
       };
 
       if (isConfigured && user) {
@@ -165,11 +144,11 @@ const CommunityWrite: React.FC = () => {
       }
 
       setStep('DONE');
-      setTimeout(() => navigate(`/community?cat=${selectedCat}`), 2000);
+      setTimeout(() => navigate(`/community?cat=${selectedCat}`), 1500);
 
     } catch (err) {
-      console.error("Report Generation Error:", err);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "리포트 생성 중 오류가 발생했습니다." }]);
+      console.error("Report Save Error:", err);
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: "리포트 저장 중 오류가 발생했습니다." }]);
       setStep('CHATTING');
     } finally {
       setIsBotTyping(false);
@@ -186,14 +165,14 @@ const CommunityWrite: React.FC = () => {
             </Link>
             <div className="flex items-center gap-3">
               <div className="size-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <span className="text-emerald-500 text-xs font-black">AI</span>
+                <span className="text-emerald-500 text-xs font-black">CHAT</span>
               </div>
               <div>
-                <h2 className="text-white font-black text-sm uppercase tracking-tight">AI 감사관 (Live)</h2>
+                <h2 className="text-white font-black text-sm uppercase tracking-tight">기록 도우미</h2>
                 <div className="flex items-center gap-1.5">
                   <span className={`size-1 rounded-full ${step === 'GENERATING' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
                   <p className={`text-[8px] font-black uppercase tracking-widest ${step === 'GENERATING' ? 'text-amber-500' : 'text-emerald-500/50'}`}>
-                    {step === 'GENERATING' ? 'Analyzing Data...' : 'Interview Active'}
+                    {step === 'GENERATING' ? 'Processing...' : 'Recording Session'}
                   </p>
                 </div>
               </div>
@@ -205,7 +184,7 @@ const CommunityWrite: React.FC = () => {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'bot' ? 'justify-start' : 'justify-end'} animate-slideUp`}>
               <div className={`max-w-[85%] ${msg.sender === 'user' ? 'bg-emerald-500 text-black font-bold' : 'bg-[#151515] text-gray-300 border border-white/5'} px-6 py-4 rounded-[1.8rem] ${msg.sender === 'bot' ? 'rounded-tl-none' : 'rounded-tr-none'} shadow-xl text-sm leading-relaxed whitespace-pre-line`}>
-                {msg.text.replace("[REPORT_READY]", "")}
+                {msg.text}
               </div>
             </div>
           ))}
@@ -253,7 +232,7 @@ const CommunityWrite: React.FC = () => {
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="size-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
-                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">AI 인텔리전스 분석 중...</span>}
+                {step === 'GENERATING' && <span className="text-[10px] font-black text-emerald-500 ml-2 uppercase tracking-widest">데이터 리포트 생성 중...</span>}
               </div>
             </div>
           )}
@@ -270,7 +249,7 @@ const CommunityWrite: React.FC = () => {
                 onChange={(e) => setUserInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 disabled={isBotTyping}
-                placeholder={isBotTyping ? "분석 중..." : "AI 감사관에게 답변을 전송하세요..."}
+                placeholder={isBotTyping ? "기다려주세요..." : "답변을 입력하고 Enter를 누르세요..."}
                 className="flex-1 bg-black border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-emerald-500/50 transition-all"
               />
               <button 

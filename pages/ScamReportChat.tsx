@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
-import { GoogleGenAI } from "@google/genai";
 
 interface Message {
   id: number;
@@ -41,7 +40,6 @@ const ScamReportChat: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // 초기 질문 시작
     setTimeout(() => {
       askQuestion(0);
     }, 1000);
@@ -100,45 +98,39 @@ const ScamReportChat: React.FC = () => {
     setMessages(prev => [...prev, { 
       id: Date.now(), 
       sender: 'bot', 
-      text: "제공해주신 데이터를 바탕으로 AI 감사관이 정밀 분석 리포트를 작성 중입니다. 잠시만 기다려 주세요... 🛡️" 
+      text: "제공해주신 데이터를 바탕으로 정밀 분석 리포트를 작성 중입니다... 🛡️" 
     }]);
 
+    const reportContent = `
+### ⚠️ [강팔이 피해 고발] 정밀 분석 리포트
+
+**1. 피해 개요**
+* **실행 부업:** ${finalAnswers[0]}
+* **강의 비용:** ${finalAnswers[1]}
+
+**2. 기망 기법 및 수법 분석**
+* **강팔이의 주장:** "${finalAnswers[3]}"
+* **주요 교육 내용:** ${finalAnswers[2]}
+
+**3. 실제 피해 사실**
+* **실행 결과:** ${finalAnswers[4]}
+* **피해자 판단 사유:** ${finalAnswers[5]} (${finalAnswers[6]})
+
+**4. 모험가 가이드 및 주의사항**
+* **주의할 점:** ${finalAnswers[7]}
+* **추가 의견:** ${finalAnswers[8]}
+
+---
+*본 리포트는 제보자의 실제 답변을 기반으로 구조화된 공익 제보 리포트입니다.*
+    `.trim();
+
     try {
-      // Initialize with process.env.API_KEY directly as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const qaPairs = QUESTIONS.map((q, i) => `질문: ${q}\n답변: ${finalAnswers[i]}`).join('\n\n');
-      
-      const prompt = `
-        너는 AI 부업 검증 플랫폼 'Ai BuUp'의 수석 사기 피해 분석 에이전트야. 
-        사용자가 입력한 사기 피해(강팔이) 데이터를 바탕으로 매우 비판적이고 분석적인 '피해 고발 리포트'를 작성해줘.
-        
-        데이터:
-        ${qaPairs}
-        
-        작성 가이드라인:
-        1. 마크다운 형식을 사용하여 전문적으로 작성할 것.
-        2. '## ⚠️ [강팔이 피해 고발] 정밀 분석 리포트'로 시작할 것.
-        3. '피해 개요', '기망 기법 분석(어떻게 속였는가)', '실제 피해 사실', 'AI 감사관의 최종 경고', '다른 모험가들을 위한 방어 가이드' 섹션으로 나눌 것.
-        4. 사용자의 답변을 논리적으로 재구성하여 읽는 사람이 피해의 심각성을 느낄 수 있게 할 것.
-        5. 리포트 최상단에 매력적인 제목을 TITLE: [제목] 형식으로 제안해줘.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-      });
-
-      const aiText = response.text || "";
-      const titleMatch = aiText.match(/TITLE:\s*(.*)/i);
-      const generatedTitle = titleMatch ? titleMatch[1].trim() : `[피해사례] ${finalAnswers[0]} 관련 제보`;
-      const cleanedContent = aiText.replace(/TITLE:.*\n?/i, '').trim();
-
       const newPost: any = {
-        title: generatedTitle,
+        title: `[피해사례] ${finalAnswers[0]} 관련 제보 리포트`,
         author: authorName || profile?.nickname || '익명의모험가',
         category: '강팔이피해사례',
-        content: cleanedContent,
-        result: 'AI 검증 완료: 사기 주의보',
+        content: reportContent,
+        result: '검증 완료: 사기 주의보',
         cost: finalAnswers[1],
         user_id: user?.id,
         created_at: new Date().toISOString(),
@@ -163,29 +155,7 @@ const ScamReportChat: React.FC = () => {
       }, 2000);
 
     } catch (err: any) {
-      console.error("AI Generation Error:", err);
-      const structuredContent = `
-### ⚠️ 강팔이 피해 리포트 (수동 아카이브)
-
-**1. 실행 부업:** ${finalAnswers[0]}
-**2. 강의 비용:** ${finalAnswers[1]}
-**3. 피해 판단:** AI 분석 오류로 기본 데이터만 저장되었습니다. (${err.message})
-      `.trim();
-
-      const fallbackPost = {
-        title: `[피해사례] ${finalAnswers[0]} 관련 제보 리포트`,
-        author: authorName || '익명',
-        category: '강팔이피해사례',
-        content: structuredContent,
-        result: '검토 중',
-        cost: finalAnswers[1],
-        user_id: user?.id,
-        created_at: new Date().toISOString()
-      };
-
-      if (isConfigured && user) {
-        await supabase.from('posts').insert([fallbackPost]);
-      }
+      console.error("Save Error:", err);
       navigate('/community?cat=강팔이피해사례');
     }
   };
@@ -194,7 +164,6 @@ const ScamReportChat: React.FC = () => {
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col pt-24 md:pt-32">
       <div className="flex-1 max-w-2xl mx-auto w-full flex flex-col px-4 md:px-0 mb-8 overflow-hidden rounded-[3rem] shadow-2xl border border-white/5 bg-black/40 backdrop-blur-xl">
         
-        {/* Chat Header */}
         <div className="bg-[#2a2a2a] p-6 flex items-center justify-between z-20 border-b border-white/5">
           <div className="flex items-center gap-4">
             <Link to="/community" className="text-gray-500 hover:text-white transition-colors">
@@ -204,11 +173,11 @@ const ScamReportChat: React.FC = () => {
             </Link>
             <div className="flex items-center gap-3">
               <div className="size-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                <span className="text-emerald-500 text-xs font-black">AI</span>
+                <span className="text-emerald-500 text-xs font-black">LOG</span>
               </div>
               <div>
                 <h2 className="text-white font-black text-sm tracking-tight flex items-center gap-2">
-                  AI 감사관
+                  기록 도우미
                   <span className="flex size-2">
                     <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -229,7 +198,6 @@ const ScamReportChat: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar min-h-[500px]">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'bot' ? 'justify-start' : 'justify-end'} animate-[slideUp_0.3s_ease-out]`}>
@@ -257,7 +225,6 @@ const ScamReportChat: React.FC = () => {
           <div ref={chatEndRef} />
         </div>
 
-        {/* Chat Input Footer */}
         <div className="bg-[#2a2a2a] p-6 space-y-4 shadow-2xl">
           {currentStep === 0 && !authorName && (
             <div className="animate-fadeIn bg-black/20 p-4 rounded-2xl border border-white/5">
@@ -279,7 +246,7 @@ const ScamReportChat: React.FC = () => {
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isSubmitting ? "AI 리포트 분석 중..." : "답변을 입력하세요..."}
+              placeholder={isSubmitting ? "리포트 작성 중..." : "답변을 입력하세요..."}
               disabled={isSubmitting || isBotTyping}
               className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-emerald-500/50 transition-all placeholder:text-gray-600"
             />
