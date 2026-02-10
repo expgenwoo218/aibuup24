@@ -206,7 +206,7 @@ const CommunityDetail: React.FC = () => {
                 {post.category}
               </div>
               <span className="text-gray-600 text-[11px] font-bold uppercase tracking-widest">
-                ID: #{post.id.toString().split('-')[0].toUpperCase()} / {new Date(post.created_at).toLocaleDateString()}
+                ID: #{post.id.toString().split('-')[0].toUpperCase()}
               </span>
             </div>
 

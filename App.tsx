@@ -79,9 +79,9 @@ const Navbar = () => {
       </div>
 
       <div className="flex justify-center items-center gap-2 md:gap-4 py-5 px-4 overflow-x-auto no-scrollbar">
-        <Link to="/about" className={getLinkStyles('/about')}>MISSION</Link>
-        <Link to="/news" className={getLinkStyles('/news')}>TRENDS</Link>
-        <Link to="/community" className={getLinkStyles('/community')}>COMMUNITY</Link>
+        <Link to="/about" className={getLinkStyles('/about')}>설립취지</Link>
+        <Link to="/news" className={getLinkStyles('/news')}>Ai News</Link>
+        <Link to="/community" className={getLinkStyles('/community')}>커뮤니티</Link>
         {profile?.role === 'ADMIN' && <Link to="/admin" className={getLinkStyles('/admin')}>ADMIN</Link>}
       </div>
     </nav>
