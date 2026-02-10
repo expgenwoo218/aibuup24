@@ -141,6 +141,7 @@ const App: React.FC = () => {
               <Route path="/community/:id" element={<CommunityDetail />} />
               <Route path="/community/write" element={<CommunityWrite />} />
               <Route path="/community/direct-write" element={<CommunityDirectWrite />} />
+              <Route path="/community/edit/:id" element={<CommunityDirectWrite />} />
               <Route path="/community/scam-chat" element={<ScamReportChat />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/vetting" element={<VettingReport />} />

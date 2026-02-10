@@ -185,9 +185,14 @@ const CommunityDetail: React.FC = () => {
           </Link>
           
           {(user?.id === post.user_id || profile?.role === 'ADMIN') && (
-            <button onClick={handleDeletePost} disabled={isDeleting} className="text-red-500/50 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors">
-              {isDeleting ? 'DELETING...' : 'DISCARD REPORT'}
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button onClick={handleDeletePost} disabled={isDeleting} className="text-red-500/50 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors">
+                {isDeleting ? 'DELETING...' : 'DISCARD REPORT'}
+              </button>
+              <Link to={`/community/edit/${id}`} className="text-emerald-500/50 hover:text-emerald-400 text-[10px] font-black uppercase tracking-widest transition-colors">
+                게시글 수정
+              </Link>
+            </div>
           )}
         </div>
 
