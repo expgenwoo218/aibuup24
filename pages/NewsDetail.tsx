@@ -1,26 +1,51 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { MOCK_NEWS } from '../constants';
 import { supabase, isConfigured } from '../lib/supabase';
 import { NewsItem } from '../types';
+import { UserContext } from '../App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 
+interface NewsComment {
+  id: string;
+  author_name: string;
+  role: string;
+  text: string;
+  created_at: string;
+}
+
 const NewsDetail: React.FC = () => {
   const { id } = useParams();
+  const { user, profile } = useContext(UserContext);
   const [news, setNews] = useState<NewsItem | null>(null);
+  const [comments, setComments] = useState<NewsComment[]>([]);
+  const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  
+  const [prevNews, setPrevNews] = useState<{ id: string; title: string } | null>(null);
+  const [nextNews, setNextNews] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     fetchNewsDetail();
+    fetchComments();
   }, [id]);
 
   const fetchNewsDetail = async () => {
     setLoading(true);
     if (!isConfigured) {
-      setNews(MOCK_NEWS.find(n => n.id === id) || null);
+      const currentNews = MOCK_NEWS.find(n => n.id === id) || null;
+      setNews(currentNews);
+      
+      if (currentNews) {
+        const currentIndex = MOCK_NEWS.findIndex(n => n.id === id);
+        setPrevNews(MOCK_NEWS[currentIndex - 1] || null);
+        setNextNews(MOCK_NEWS[currentIndex + 1] || null);
+      }
+      
       setLoading(false);
       return;
     }
@@ -34,11 +59,91 @@ const NewsDetail: React.FC = () => {
 
       if (error) throw error;
       setNews(data);
+
+      if (data) {
+        // 이전 뉴스 (더 과거의 뉴스)
+        const { data: pData } = await supabase
+          .from('news')
+          .select('id, title')
+          .lt('created_at', data.created_at)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        setPrevNews(pData);
+
+        // 다음 뉴스 (더 최신의 뉴스)
+        const { data: nData } = await supabase
+          .from('news')
+          .select('id, title')
+          .gt('created_at', data.created_at)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        setNextNews(nData);
+      }
     } catch (err) {
       console.warn("Detailed news fetch failed");
-      setNews(MOCK_NEWS.find(n => n.id === id) || null);
+      const fallbackNews = MOCK_NEWS.find(n => n.id === id) || null;
+      setNews(fallbackNews);
+      if (fallbackNews) {
+        const currentIndex = MOCK_NEWS.findIndex(n => n.id === id);
+        setPrevNews(MOCK_NEWS[currentIndex - 1] || null);
+        setNextNews(MOCK_NEWS[currentIndex + 1] || null);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchComments = async () => {
+    if (!isConfigured || !id) return;
+    try {
+      const { data, error } = await supabase
+        .from('news_comments')
+        .select('*')
+        .eq('news_id', id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setComments(data || []);
+    } catch (err) {
+      console.error('Comments fetch failed:', err);
+    }
+  };
+
+  const handleCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !user || !id || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const authorName = profile?.nickname || user?.email?.split('@')[0] || '익명의모험가';
+      const authorRole = profile?.role || 'SILVER';
+
+      const { data, error } = await supabase.from('news_comments').insert({
+        news_id: id,
+        user_id: user.id,
+        author_name: authorName,
+        role: authorRole,
+        text: newComment
+      }).select().single();
+
+      if (error) throw error;
+      setComments([data, ...comments]);
+      setNewComment('');
+    } catch (err) {
+      console.error('Comment submission failed:', err);
+      alert('댓글 작성 중 오류가 발생했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'ADMIN': return 'text-red-500 border-red-500/30 bg-red-500/10';
+      case 'GOLD': return 'text-yellow-500 border-yellow-500/30 bg-yellow-500/10';
+      default: return 'text-gray-400 border-white/10 bg-white/5';
     }
   };
 
@@ -71,7 +176,6 @@ const NewsDetail: React.FC = () => {
             <span className="bg-emerald-500/10 text-emerald-400 font-black uppercase text-[10px] tracking-widest px-4 py-1.5 rounded-full border border-emerald-500/20">
               {news.category}
             </span>
-            <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">{news.date}</span>
           </div>
           <h1 className="text-3xl md:text-7xl font-black tracking-tighter leading-[1.1] break-words">
             {news.title}
@@ -101,6 +205,88 @@ const NewsDetail: React.FC = () => {
               </ReactMarkdown>
             </div>
           </div>
+
+          {/* 이전 뉴스 / 다음 뉴스 네비게이션 */}
+          <div className="flex flex-col sm:flex-row gap-4 mt-20 mb-24">
+            {prevNews ? (
+              <Link 
+                to={`/news/${prevNews.id}`} 
+                className="flex-1 group bg-neutral-900/50 border border-white/5 p-6 rounded-3xl transition-all hover:border-emerald-500/30"
+              >
+                <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Previous News</div>
+                <div className="text-sm font-bold text-gray-400 group-hover:text-emerald-400 transition-colors line-clamp-1">{prevNews.title}</div>
+              </Link>
+            ) : (
+              <div className="flex-1 bg-neutral-900/10 border border-white/5 p-6 rounded-3xl opacity-30 cursor-not-allowed">
+                <div className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2">Previous News</div>
+                <div className="text-sm font-bold text-gray-700 italic">No more items.</div>
+              </div>
+            )}
+
+            {nextNews ? (
+              <Link 
+                to={`/news/${nextNews.id}`} 
+                className="flex-1 group bg-neutral-900/50 border border-white/5 p-6 rounded-3xl text-right transition-all hover:border-emerald-500/30"
+              >
+                <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Next News</div>
+                <div className="text-sm font-bold text-gray-400 group-hover:text-emerald-400 transition-colors line-clamp-1">{nextNews.title}</div>
+              </Link>
+            ) : (
+              <div className="flex-1 bg-neutral-900/10 border border-white/5 p-6 rounded-3xl text-right opacity-30 cursor-not-allowed">
+                <div className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2">Next News</div>
+                <div className="text-sm font-bold text-gray-700 italic">Latest news reached.</div>
+              </div>
+            )}
+          </div>
+
+          {/* 댓글 섹션 */}
+          <section className="mt-24 pt-16 border-t border-white/10">
+            <div className="flex items-center gap-4 mb-10">
+              <h3 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Reader Feedback</h3>
+              <span className="text-emerald-500 font-bold text-sm px-3 py-1 bg-emerald-500/10 rounded-lg">{comments.length}</span>
+            </div>
+
+            <form onSubmit={handleCommentSubmit} className="mb-16 bg-neutral-900/50 border border-white/5 p-6 md:p-8 rounded-[2rem] shadow-xl">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder={user ? "이 뉴스 트렌드에 대한 모험가님의 생각을 공유해 주세요." : "댓글을 작성하려면 로그인이 필요합니다."}
+                disabled={!user || submitting}
+                className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 md:p-6 text-white outline-none focus:border-emerald-500/50 transition-all min-h-[120px] mb-6 resize-none"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={!newComment.trim() || !user || submitting}
+                  className="bg-white text-black font-black px-8 md:px-10 py-3 md:py-4 rounded-xl hover:bg-emerald-500 transition-all uppercase text-[10px] md:text-[11px] tracking-widest disabled:opacity-30"
+                >
+                  {submitting ? 'Sending...' : 'Post Thought'}
+                </button>
+              </div>
+            </form>
+
+            <div className="space-y-6">
+              {comments.length > 0 ? comments.map((comment) => (
+                <div key={comment.id} className="bg-neutral-900/30 border border-white/5 p-6 md:p-8 rounded-[2rem] transition-all hover:bg-white/[0.02]">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-white font-black text-sm">{comment.author_name}</span>
+                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest ${getRoleColor(comment.role)}`}>
+                        {comment.role}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-sm leading-relaxed break-words">
+                    {comment.text}
+                  </p>
+                </div>
+              )) : (
+                <div className="py-20 text-center border border-dashed border-white/5 rounded-[2.5rem]">
+                  <p className="text-gray-600 font-black text-xs uppercase tracking-[0.3em]">No Thoughts Shared Yet</p>
+                </div>
+              )}
+            </div>
+          </section>
 
           <footer className="mt-20 md:mt-32 pt-16 border-t border-white/10">
             <div className="bg-neutral-900 border border-white/10 rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-20 text-center relative overflow-hidden group">
