@@ -275,9 +275,6 @@ const NewsDetail: React.FC = () => {
                         {comment.role}
                       </span>
                     </div>
-                    <span className="text-gray-600 text-[10px] font-bold">
-                      {new Date(comment.created_at).toLocaleDateString()}
-                    </span>
                   </div>
                   <p className="text-gray-400 text-sm leading-relaxed break-words">
                     {comment.text}
