@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
@@ -49,7 +50,7 @@ const Admin: React.FC = () => {
 
   const [newsForm, setNewsForm] = useState({
     title: '',
-    category: 'NEWS',
+    category: 'Trend',
     summary: '',
     content: '',
     image_url: ''
@@ -234,7 +235,7 @@ const Admin: React.FC = () => {
       }]).select().single();
       if (error) throw error;
       setNews(prev => [data, ...prev]);
-      setNewsForm({ title: '', category: 'NEWS', summary: '', content: '', image_url: '' });
+      setNewsForm({ title: '', category: 'Trend', summary: '', content: '', image_url: '' });
       setImagePreview(null);
       alert('뉴스 발행 성공!');
     } catch (err: any) {
@@ -477,10 +478,10 @@ const Admin: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Category</label>
                     <select value={newsForm.category} onChange={e => setNewsForm({...newsForm, category: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none">
-                      <option value="NEWS">NEWS</option>
-                      <option value="공지">공지</option>
-                      <option value="리뷰">리뷰</option>
-                      <option value="Ai Trend">Ai Trend</option>
+                      <option value="Trend">Trend</option>
+                      <option value="Tutorial">Tutorial</option>
+                      <option value="Review">Review</option>
+                      <option value="Update">Update</option>
                     </select>
                   </div>
                   <div className="space-y-2">

@@ -119,6 +119,7 @@ const Home: React.FC = () => {
                   </div>
                 </div>
                 <div className="p-8">
+                  <div className="text-gray-500 text-[10px] font-bold mb-3 uppercase tracking-widest">{news.date}</div>
                   <h3 className="text-xl md:text-2xl font-black mb-4 leading-tight group-hover:text-emerald-400 transition-colors line-clamp-2">
                     {news.title}
                   </h3>

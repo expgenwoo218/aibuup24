@@ -79,7 +79,7 @@ const Community: React.FC = () => {
     switch (category) {
       case '강팔이피해사례': return 'bg-red-500 text-black';
       case 'Ai부업경험담': return 'bg-amber-500 text-black';
-      case 'Ai부업제안': return 'bg-blue-500 text-white';
+      case '미래비전공유': return 'bg-blue-500 text-white';
       case '검증요청게시판': return 'bg-emerald-500 text-black';
       case '수익인증': return 'bg-green-500 text-black';
       case '협업및신사업제안': return 'bg-cyan-500 text-black';
@@ -200,7 +200,7 @@ const Community: React.FC = () => {
                           {post.category}
                         </span>
                         <span className="text-gray-600 text-[10px] font-bold">
-                          {post.author}
+                          {post.author} • {post.created_at ? new Date(post.created_at).toLocaleDateString() : '날짜 미상'}
                         </span>
                       </div>
                       <h3 className="text-2xl md:text-3xl font-black mb-4 group-hover:text-emerald-400 transition-colors">{post.title}</h3>

@@ -15,7 +15,7 @@ export const BOARD_CATEGORIES = [
   { id: 'all', name: '전체' },
   { id: 'scam', name: '강팔이피해사례' },
   { id: 'exp', name: 'Ai부업경험담' },
-  { id: 'vision', name: 'Ai부업제안' },
+  { id: 'vision', name: '미래비전공유' },
   { id: 'request', name: '검증요청게시판' },
   { id: 'profit', name: '수익인증' },
   { id: 'collab', name: '협업및신사업제안' }
@@ -28,7 +28,7 @@ export const VIP_CATEGORIES = [
 
 export const ABOUT_BANNERS = [
   { id: 'vetted-list', title: '검증요청게시판', desc: '의심되는 부업이 있다면 집단 지성으로 함께 검증합니다.', color: 'from-emerald-600 to-teal-800', icon: '🔍', category: '검증요청게시판' },
-  { id: 'investment-system', title: 'Ai부업제안', desc: '자신의 상황에 맞는 부업을 선택할 수 있도록 데이터로 분석합니다.', color: 'from-blue-600 to-indigo-800', icon: '📊', category: 'Ai부업제안' },
+  { id: 'investment-system', title: '미래비전공유', desc: '자신의 상황에 맞는 부업을 선택할 수 있도록 데이터로 분석합니다.', color: 'from-blue-600 to-indigo-800', icon: '📊', category: '미래비전공유' },
   { id: 'damage-cases', title: '강팔이피해사례', desc: '더 이상의 피해자가 나오지 않도록 실제 사례를 통해 예방합니다.', color: 'from-red-600 to-orange-800', icon: '⚠️', category: '강팔이피해사례' },
   { id: 'trend-news', title: '최신 트렌드\nAi 부업 뉴스', desc: '급변하는 AI 생태계의 정보를 가장 빠르게 전달하고 토론합니다.', color: 'from-purple-600 to-pink-800', icon: '📰', category: 'NEWS_PAGE' },
   { id: 'experience-stories', title: 'Ai부업경험담', desc: '성공과 실패의 모든 기록이 여러분의 시행착오를 줄여줍니다.', color: 'from-amber-600 to-yellow-800', icon: '📝', category: 'Ai부업경험담' },

@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { CommunityPost } from '../types';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
+import { VIP_CATEGORIES } from '../constants';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -31,11 +32,14 @@ const CommunityDetail: React.FC = () => {
   const [prevPost, setPrevPost] = useState<{ id: string; title: string } | null>(null);
   const [nextPost, setNextPost] = useState<{ id: string; title: string } | null>(null);
 
+  const isVipUser = profile?.role === 'GOLD' || profile?.role === 'ADMIN';
+  const vipCategoryNames = VIP_CATEGORIES.map(v => v.name);
+
   useEffect(() => {
     if (id) {
       fetchPostAndComments();
     }
-  }, [id]);
+  }, [id, profile]); // profile이 로드된 후 권한 체크를 위해 의존성 추가
 
   const fetchPostAndComments = async () => {
     if (!isConfigured) return;
@@ -51,27 +55,39 @@ const CommunityDetail: React.FC = () => {
       if (postError) throw postError;
 
       if (postData) {
+        // 권한 체크: SILVER 등급이 고수의 방 글에 접근하려 할 때
+        if (vipCategoryNames.includes(postData.category) && !isVipUser) {
+          alert('고수의 방 게시글은 GOLD 등급 이상만 열람 가능합니다.');
+          navigate('/community');
+          return;
+        }
+
         setPost(postData);
         setLikeCount(postData.likes || 0);
 
-        // 이전글 (더 오래된 글)
-        const { data: pData } = await supabase
+        // 이전글/다음글 쿼리 시 등급에 따른 필터링 적용
+        let prevQuery = supabase
           .from('posts')
           .select('id, title')
           .lt('created_at', postData.created_at)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        setPrevPost(pData);
+          .order('created_at', { ascending: false });
 
-        // 다음글 (더 최신 글)
-        const { data: nData } = await supabase
+        let nextQuery = supabase
           .from('posts')
           .select('id, title')
           .gt('created_at', postData.created_at)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
+          .order('created_at', { ascending: true });
+
+        // VIP가 아닌 경우 고수의 방 카테고리 제외
+        if (!isVipUser) {
+          prevQuery = prevQuery.not('category', 'in', `(${vipCategoryNames.join(',')})`);
+          nextQuery = nextQuery.not('category', 'in', `(${vipCategoryNames.join(',')})`);
+        }
+
+        const { data: pData } = await prevQuery.limit(1).maybeSingle();
+        setPrevPost(pData);
+
+        const { data: nData } = await nextQuery.limit(1).maybeSingle();
         setNextPost(nData);
 
         const { data: commentData } = await supabase
@@ -161,7 +177,7 @@ const CommunityDetail: React.FC = () => {
   );
 
   const isScam = post.category === '강팔이피해사례';
-  const isVip = post.category.includes('검증된부업분석') || post.category.includes('회원노하우');
+  const isVip = vipCategoryNames.includes(post.category);
   const themeColor = isScam ? 'red' : isVip ? 'yellow' : 'emerald';
 
   const getRoleColor = (role: string) => {
@@ -185,14 +201,9 @@ const CommunityDetail: React.FC = () => {
           </Link>
           
           {(user?.id === post.user_id || profile?.role === 'ADMIN') && (
-            <div className="flex flex-col items-end gap-2">
-              <button onClick={handleDeletePost} disabled={isDeleting} className="text-red-500/50 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors">
-                {isDeleting ? 'DELETING...' : 'DISCARD REPORT'}
-              </button>
-              <Link to={`/community/edit/${id}`} className="text-emerald-500/50 hover:text-emerald-400 text-[10px] font-black uppercase tracking-widest transition-colors">
-                게시글 수정
-              </Link>
-            </div>
+            <button onClick={handleDeletePost} disabled={isDeleting} className="text-red-500/50 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors">
+              {isDeleting ? 'DELETING...' : 'DISCARD REPORT'}
+            </button>
           )}
         </div>
 
@@ -211,7 +222,7 @@ const CommunityDetail: React.FC = () => {
                 {post.category}
               </div>
               <span className="text-gray-600 text-[11px] font-bold uppercase tracking-widest">
-                ID: #{post.id.toString().split('-')[0].toUpperCase()}
+                ID: #{post.id.toString().split('-')[0].toUpperCase()} / {new Date(post.created_at).toLocaleDateString()}
               </span>
             </div>
 
@@ -347,6 +358,9 @@ const CommunityDetail: React.FC = () => {
                       {comment.role}
                     </span>
                   </div>
+                  <span className="text-gray-600 text-[10px] font-bold">
+                    {new Date(comment.created_at).toLocaleDateString()}
+                  </span>
                 </div>
                 <p className="text-gray-400 text-sm leading-relaxed break-words">
                   {comment.text}

@@ -31,8 +31,8 @@ const AboutDetail: React.FC = () => {
   return (
     <div className="pt-32 pb-32 min-h-screen bg-black">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        <Link to="/about" className="text-emerald-500 hover:text-white transition-colors mb-12 inline-block font-bold">
-          ← 돌아가기
+        <Link to="/community" className="text-emerald-500 hover:text-white transition-colors mb-12 inline-block font-bold">
+          ← Back to Community
         </Link>
         
         <div className={`p-8 sm:p-16 md:p-24 rounded-[3rem] md:rounded-[4rem] bg-gradient-to-br ${banner.color} shadow-2xl relative overflow-hidden`}>

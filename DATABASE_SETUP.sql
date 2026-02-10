@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
     score integer DEFAULT 5
 );
 
--- 6. 댓글 테이블 (커뮤니티용)
+-- 6. 댓글 테이블
 CREATE TABLE IF NOT EXISTS public.comments (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -107,17 +107,6 @@ CREATE TABLE IF NOT EXISTS public.chat_questions (
     created_at timestamptz DEFAULT now()
 );
 
--- 12. 뉴스 댓글 테이블 (추가됨)
-CREATE TABLE IF NOT EXISTS public.news_comments (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    news_id uuid REFERENCES public.news(id) ON DELETE CASCADE,
-    user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-    author_name text NOT NULL,
-    role text DEFAULT 'SILVER',
-    text text NOT NULL,
-    created_at timestamptz DEFAULT now()
-);
-
 -- 9. 보안 정책 (RLS) 활성화
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
@@ -125,7 +114,6 @@ ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_questions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.news_comments ENABLE ROW LEVEL SECURITY;
 
 -- 10. 정책 설정
 
@@ -165,19 +153,11 @@ CREATE POLICY "Anyone can insert contacts" ON public.contacts FOR INSERT WITH CH
 DROP POLICY IF EXISTS "Admins can view contacts" ON public.contacts;
 CREATE POLICY "Admins can view contacts" ON public.contacts FOR SELECT USING (public.is_admin());
 
--- Chat Questions 정책
+-- Chat Questions 정책 (추가됨)
 DROP POLICY IF EXISTS "Anyone can view chat questions" ON public.chat_questions;
 CREATE POLICY "Anyone can view chat questions" ON public.chat_questions FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admins can manage chat questions" ON public.chat_questions;
 CREATE POLICY "Admins can manage chat questions" ON public.chat_questions FOR ALL USING (public.is_admin());
-
--- News Comments 정책 (추가됨)
-DROP POLICY IF EXISTS "News comments viewable by everyone" ON public.news_comments;
-CREATE POLICY "News comments viewable by everyone" ON public.news_comments FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Authenticated users insert news comments" ON public.news_comments;
-CREATE POLICY "Authenticated users insert news comments" ON public.news_comments FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS "Users/Admins manage own news comments" ON public.news_comments;
-CREATE POLICY "Users/Admins manage own news comments" ON public.news_comments FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
 -- 초기 데이터 삽입 (기존 질문들 마이그레이션)
 INSERT INTO public.chat_questions (category, question_text, order_index) VALUES 
