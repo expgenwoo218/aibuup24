@@ -5,6 +5,7 @@ import { supabase, isConfigured } from '../lib/supabase';
 import { CommunityPost, NewsItem } from '../types';
 import { UserContext } from '../App';
 import { BOARD_CATEGORIES, VIP_CATEGORIES } from '../constants';
+import { GoogleGenAI } from "@google/genai";
 
 interface Profile {
   id: string;
@@ -29,9 +30,9 @@ const Admin: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'news' | 'questions'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'news' | 'questions' | 'auto_post'>('posts');
   
-  // 페이지네이션 상태 (30개 단위로 변경)
+  // 페이지네이션 상태
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
 
@@ -40,8 +41,18 @@ const Admin: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Ai부업경험담');
   const [newQuestionText, setNewQuestionText] = useState('');
 
-  // 뉴스 프리뷰 상태
-  const [previewNews, setPreviewNews] = useState<NewsItem | null>(null);
+  // 자동 게시글 생성 상태
+  const [autoPostEmail, setAutoPostEmail] = useState('');
+  const [autoPostCategory, setAutoPostCategory] = useState('Ai부업경험담');
+  const [persona, setPersona] = useState({
+    level: '초보',
+    scam: '피해 없음',
+    exp: '미경험',
+    attitude: '긍정적',
+    job: '직장인',
+    marital: '미혼',
+    children: '자녀 없음'
+  });
 
   const allCategories = [...BOARD_CATEGORIES.map(c => c.name), ...VIP_CATEGORIES.map(v => v.name)].filter(n => n !== '전체');
   
@@ -70,7 +81,7 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
     fetchAdminData();
-    setCurrentPage(1); // 탭 변경 시 페이지 리셋
+    setCurrentPage(1);
   }, [activeTab, selectedCategory]);
 
   const fetchAdminData = async () => {
@@ -78,18 +89,15 @@ const Admin: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'posts') {
-        // 1. 게시글과 조인된 프로필 정보 가져오기 시도
         const { data: postsData, error: postsError } = await supabase
           .from('posts')
           .select('*, profiles(email)')
           .order('created_at', { ascending: false });
         
-        // 2. 조인이 실패할 경우를 대비해 전체 회원 정보도 미리 가져옴 (매핑용)
         const { data: profilesData } = await supabase.from('profiles').select('id, email');
         if (profilesData) setProfiles(profilesData as any);
 
         if (postsError) {
-          console.error('Post fetch error:', postsError);
           const { data: fallbackData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
           setPosts(fallbackData || []);
         } else {
@@ -115,7 +123,86 @@ const Admin: React.FC = () => {
     }
   };
 
-  // 각 데이터별 페이지네이션 계산 (itemsPerPage = 30 적용)
+  const handleAutoPostGenerate = async () => {
+    if (!autoPostEmail.trim()) return alert('발행 대상 이메일을 입력해주세요.');
+    setIsPublishing(true);
+
+    try {
+      // 1. 대상 사용자 조회
+      const { data: targetProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', autoPostEmail.trim())
+        .single();
+
+      if (profileError || !targetProfile) throw new Error('해당 이메일을 가진 회원을 찾을 수 없습니다.');
+
+      // 2. 카테고리 질문지 조회
+      const { data: catQuestions } = await supabase
+        .from('chat_questions')
+        .select('question_text')
+        .eq('category', autoPostCategory)
+        .order('order_index', { ascending: true });
+
+      const questionTexts = catQuestions?.map(q => q.question_text) || ["제목을 정해주세요.", "내용을 작성해주세요."];
+
+      // 3. AI 답변 생성 (Gemini)
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `
+        당신은 지금부터 아래 페르소나를 가진 커뮤니티 사용자입니다.
+        페르소나: ${persona.level}, ${persona.scam}, ${persona.exp}, ${persona.attitude}, ${persona.job}, ${persona.marital}, ${persona.children}
+        
+        이 페르소나에 완벽히 빙의하여, 아래 질문들에 대해 자연스럽고 생생한 한국어 구어체로 답변을 작성해주세요. 
+        실제 사람이 쓴 것처럼 감정과 디테일이 살아있어야 합니다.
+        
+        질문 목록:
+        ${questionTexts.map((q, i) => `${i+1}. ${q}`).join('\n')}
+        
+        응답은 반드시 질문 순서대로 답변만 나열하되, 각 답변은 줄바꿈으로 구분해주세요.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      });
+
+      const aiAnswers = response.text.split('\n').filter(line => line.trim().length > 0);
+      
+      // 4. 리포트 본문 구성
+      let reportContent = `## 📊 AI Generated Intelligence Report\n\n`;
+      reportContent += `> **Auditor Persona**: ${persona.level} 모험가 / ${persona.job} / ${persona.exp}\n\n`;
+      
+      questionTexts.forEach((q, i) => {
+        reportContent += `### 🔍 ${q}\n> ${aiAnswers[i] || 'AI가 답변을 생성하지 못했습니다.'}\n\n`;
+      });
+
+      // 5. 게시글 등록
+      const postData = {
+        title: aiAnswers[0]?.slice(0, 50) || `[${autoPostCategory}] AI 자동 생성 리포트`,
+        author: targetProfile.nickname,
+        category: autoPostCategory,
+        content: reportContent,
+        result: 'AI Verified Archive',
+        user_id: targetProfile.id,
+        tool: 'Gemini AI Integration',
+        daily_time: 'N/A',
+        created_at: new Date().toISOString(),
+        likes: Math.floor(Math.random() * 5)
+      };
+
+      const { error: insertError } = await supabase.from('posts').insert([postData]);
+      if (insertError) throw insertError;
+
+      alert(`${targetProfile.nickname} 님의 이름으로 글이 성공적으로 발행되었습니다.`);
+      setAutoPostEmail('');
+      setActiveTab('posts');
+    } catch (err: any) {
+      alert('오류 발생: ' + err.message);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const currentPagedPosts = useMemo(() => posts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [posts, currentPage]);
   const currentPagedUsers = useMemo(() => profiles.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [profiles, currentPage]);
   const currentPagedNews = useMemo(() => news.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [news, currentPage]);
@@ -151,7 +238,6 @@ const Admin: React.FC = () => {
     );
   };
 
-  // 질문 관리 CRUD
   const addQuestion = async () => {
     if (!newQuestionText.trim()) return;
     try {
@@ -185,9 +271,7 @@ const Admin: React.FC = () => {
     const newQuestions = [...questions];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= newQuestions.length) return;
-
     [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
-    
     try {
       await Promise.all(newQuestions.map((q, idx) => 
         supabase.from('chat_questions').update({ order_index: idx }).eq('id', q.id)
@@ -196,7 +280,6 @@ const Admin: React.FC = () => {
     } catch (e) { alert('순서 변경 실패'); }
   };
 
-  // 기존 뉴스 관리 핸들러
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -212,9 +295,7 @@ const Admin: React.FC = () => {
   const removeImage = () => {
     setImagePreview(null);
     setNewsForm(prev => ({ ...prev, image_url: '' }));
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const deletePost = async (id: string) => {
@@ -223,9 +304,7 @@ const Admin: React.FC = () => {
       const { error } = await supabase.from('posts').delete().eq('id', id);
       if (error) throw error;
       setPosts(posts.filter(p => p.id !== id));
-    } catch (e) {
-      alert('삭제 실패');
-    }
+    } catch (e) { alert('삭제 실패'); }
   };
 
   const deleteNews = async (id: string) => {
@@ -234,10 +313,7 @@ const Admin: React.FC = () => {
       const { error } = await supabase.from('news').delete().eq('id', id);
       if (error) throw error;
       setNews(news.filter(n => n.id !== id));
-      if (previewNews?.id === id) setPreviewNews(null);
-    } catch (e) {
-      alert('삭제 실패');
-    }
+    } catch (e) { alert('삭제 실패'); }
   };
 
   const handleCreateNews = async (e: React.FormEvent) => {
@@ -253,11 +329,7 @@ const Admin: React.FC = () => {
       setNewsForm({ title: '', category: 'NEWS', summary: '', content: '', image_url: '' });
       setImagePreview(null);
       alert('뉴스 발행 성공!');
-    } catch (err: any) {
-      alert('에러: ' + err.message);
-    } finally {
-      setIsPublishing(false);
-    }
+    } catch (err: any) { alert('에러: ' + err.message); } finally { setIsPublishing(false); }
   };
 
   const updateUserRole = async (userId: string, newRole: string) => {
@@ -266,9 +338,7 @@ const Admin: React.FC = () => {
       if (error) throw error;
       setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole as any } : p));
       alert(`회원 등급이 ${newRole} 등급으로 변경되었습니다.`);
-    } catch (err: any) {
-      alert('등급 변경 실패');
-    }
+    } catch (err: any) { alert('등급 변경 실패'); }
   };
 
   const forceWithdrawal = async (userId: string) => {
@@ -279,28 +349,21 @@ const Admin: React.FC = () => {
       if (error) throw error;
       setProfiles(prev => prev.filter(p => p.id !== userId));
       alert('탈퇴 처리 완료');
-    } catch (err: any) {
-      alert('탈퇴 처리 실패');
-    }
+    } catch (err: any) { alert('탈퇴 처리 실패'); }
   };
 
-  // 이메일 추출을 위한 가장 확실한 헬퍼 함수
   const getAuthorEmail = (post: any) => {
-    // 1. Supabase 조인 결과 확인
     const joinedProfile = post.profiles;
     if (joinedProfile) {
       if (Array.isArray(joinedProfile) && joinedProfile[0]?.email) return joinedProfile[0].email;
       if (joinedProfile.email) return joinedProfile.email;
     }
-
-    // 2. 조인 결과가 없을 경우, 전체 로드된 profiles 리스트에서 직접 매핑 (사용자 요청 사항)
     const foundProfile = profiles.find(p => p.id === post.user_id);
     if (foundProfile) return foundProfile.email;
-
     return 'N/A';
   };
 
-  if (loading && activeTab !== 'questions' && activeTab !== 'news') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
+  if (loading && activeTab !== 'questions' && activeTab !== 'news' && activeTab !== 'auto_post') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
 
   return (
     <div className="min-h-screen bg-black pt-12 pb-32 px-6">
@@ -321,39 +384,147 @@ const Admin: React.FC = () => {
           <button onClick={() => setActiveTab('users')} className={`px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${activeTab === 'users' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>회원 관리</button>
           <button onClick={() => setActiveTab('news')} className={`px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${activeTab === 'news' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>뉴스피드 관리</button>
           <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>대화 질문 관리</button>
+          <button onClick={() => setActiveTab('auto_post')} className={`px-8 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${activeTab === 'auto_post' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>자동 게시글 생성</button>
         </div>
+
+        {/* 자동 게시글 생성 섹션 */}
+        {activeTab === 'auto_post' && (
+          <div className="animate-fadeIn max-w-4xl mx-auto">
+            <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl">
+              <h2 className="text-2xl font-black uppercase italic mb-8 flex items-center gap-3">
+                <span className="text-emerald-500">🤖</span> AI Auto-Publisher
+              </h2>
+              
+              <div className="space-y-8">
+                {/* 대상 회원 이메일 및 카테고리 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Target User Email</label>
+                    <input 
+                      type="email"
+                      value={autoPostEmail}
+                      onChange={(e) => setAutoPostEmail(e.target.value)}
+                      placeholder="글을 발행할 회원의 이메일 입력"
+                      className="w-full bg-black/50 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-emerald-500/50 text-white text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Board Category</label>
+                    <select 
+                      value={autoPostCategory}
+                      onChange={(e) => setAutoPostCategory(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-emerald-500/50 text-white text-sm"
+                    >
+                      {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 페르소나 설정 섹션 */}
+                <div className="bg-white/5 rounded-3xl p-8 border border-white/5">
+                  <h3 className="text-xs font-black text-emerald-500 uppercase tracking-[0.3em] mb-6 italic">Persona Configuration</h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* 레벨 */}
+                    <div className="space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">숙련도</label>
+                      <div className="flex gap-2">
+                        {['초보', '중수', '고수'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, level: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.level === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 강팔이 피해 */}
+                    <div className="space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">강팔이 피해</label>
+                      <div className="flex gap-2">
+                        {['피해 있음', '피해 없음'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, scam: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.scam === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 부업 경험 */}
+                    <div className="space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">부업 경험</label>
+                      <div className="flex gap-2">
+                        {['성공경험', '실패경험', '미경험'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, exp: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.exp === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 성향 */}
+                    <div className="space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">부업 성향</label>
+                      <div className="flex gap-2">
+                        {['긍정적', '부정적'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, attitude: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.attitude === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 결혼 */}
+                    <div className="space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">결혼 상태</label>
+                      <div className="flex gap-2">
+                        {['미혼', '기혼'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, marital: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.marital === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 자녀 */}
+                    <div className="space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">자녀 유무</label>
+                      <div className="flex gap-2">
+                        {['자녀 있음', '자녀 없음'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, children: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.children === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 직업 성향 (길어서 따로 처리) */}
+                  <div className="mt-8 space-y-3">
+                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">직업군</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['직장인', '사업자', '1인 창업', '주부', '학생', '은퇴자', '백수'].map(v => (
+                        <button key={v} onClick={() => setPersona({...persona, job: v})} className={`px-4 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.job === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleAutoPostGenerate}
+                  disabled={isPublishing}
+                  className="w-full bg-emerald-500 text-black font-black py-6 rounded-2xl uppercase tracking-[0.3em] text-sm hover:bg-white transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-4 disabled:opacity-50"
+                >
+                  {isPublishing ? (
+                    <><div className="size-5 border-2 border-black/20 border-t-black rounded-full animate-spin" /> GENERATING INTELLIGENCE...</>
+                  ) : 'AI 답변 생성 및 글 발행'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 질문 관리 탭 */}
         {activeTab === 'questions' && (
           <div className="animate-fadeIn">
             <div className="flex flex-col md:flex-row gap-8">
-              {/* 카테고리 사이드바 */}
               <div className="md:w-64 shrink-0">
                 <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4 px-2 italic">Board Categories</h3>
                 <div className="space-y-1">
                   {allCategories.map(cat => (
-                    <button 
-                      key={cat} 
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`w-full text-left px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-tight transition-all border ${selectedCategory === cat ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-neutral-900/50 text-gray-400 border-white/5 hover:border-white/20'}`}
-                    >
-                      {cat}
-                    </button>
+                    <button key={cat} onClick={() => setSelectedCategory(cat)} className={`w-full text-left px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-tight transition-all border ${selectedCategory === cat ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-neutral-900/50 text-gray-400 border-white/5 hover:border-white/20'}`}>{cat}</button>
                   ))}
                 </div>
               </div>
-
-              {/* 질문 편집 영역 */}
               <div className="flex-1">
                 <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 size-64 bg-emerald-500/5 blur-[100px] pointer-events-none" />
                   <div className="flex items-center justify-between mb-8 relative z-10">
-                    <h2 className="text-xl font-black uppercase italic tracking-tight">
-                      Chat Questions: <span className="text-emerald-500">{selectedCategory}</span>
-                    </h2>
+                    <h2 className="text-xl font-black uppercase italic tracking-tight">Chat Questions: <span className="text-emerald-500">{selectedCategory}</span></h2>
                     <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{questions.length} Questions Defined</span>
                   </div>
-
                   <div className="space-y-4 mb-10 relative z-10">
                     {questions.map((q, idx) => (
                       <div key={q.id} className="group flex items-center gap-4 bg-white/5 border border-white/5 rounded-2xl p-4 transition-all hover:border-emerald-500/30">
@@ -362,27 +533,13 @@ const Admin: React.FC = () => {
                           <button onClick={() => moveQuestion(idx, 'down')} className="text-gray-600 hover:text-white transition-colors">▼</button>
                         </div>
                         <span className="text-emerald-500 font-black text-xs w-6 text-center">{idx + 1}</span>
-                        <input 
-                          type="text" 
-                          value={q.question_text} 
-                          onChange={(e) => updateQuestionText(q.id, e.target.value)}
-                          className="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium"
-                        />
+                        <input type="text" value={q.question_text} onChange={(e) => updateQuestionText(q.id, e.target.value)} className="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium" />
                         <button onClick={() => deleteQuestion(q.id)} className="text-red-500/30 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all font-bold text-[10px] uppercase">Remove</button>
                       </div>
                     ))}
-                    {questions.length === 0 && <div className="py-20 text-center text-gray-600 text-[10px] font-black uppercase tracking-[0.4em]">No customized questions for this category.</div>}
                   </div>
-
                   <div className="flex gap-3 pt-8 border-t border-white/5 relative z-10">
-                    <input 
-                      type="text" 
-                      value={newQuestionText} 
-                      onChange={(e) => setNewQuestionText(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addQuestion()}
-                      placeholder="새 질문을 입력하고 Enter를 누르세요..."
-                      className="flex-1 bg-black border border-white/10 rounded-xl px-5 py-3 text-sm outline-none focus:border-emerald-500/50"
-                    />
+                    <input type="text" value={newQuestionText} onChange={(e) => setNewQuestionText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addQuestion()} placeholder="새 질문을 입력하고 Enter를 누르세요..." className="flex-1 bg-black border border-white/10 rounded-xl px-5 py-3 text-sm outline-none focus:border-emerald-500/50" />
                     <button onClick={addQuestion} className="bg-emerald-500 text-black font-black px-8 rounded-xl text-xs uppercase hover:bg-white transition-all shadow-xl shadow-emerald-500/20">Add Question</button>
                   </div>
                 </div>
@@ -455,9 +612,7 @@ const Admin: React.FC = () => {
                           <span className="text-[10px] text-gray-500">{p.email}</span>
                         </Link>
                       </td>
-                      <td className="px-8 py-6 text-[11px] text-gray-500">
-                        {new Date(p.created_at).toLocaleDateString()}
-                      </td>
+                      <td className="px-8 py-6 text-[11px] text-gray-500">{new Date(p.created_at).toLocaleDateString()}</td>
                       <td className="px-8 py-6">
                         <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase border shadow-sm ${
                           p.role === 'ADMIN' ? 'bg-red-500/10 border-red-500/30 text-red-500' : 
@@ -487,59 +642,23 @@ const Admin: React.FC = () => {
         {activeTab === 'news' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn">
             <div className="lg:col-span-1 space-y-8">
-              {/* 프리뷰 영역 (선택 시 보임) */}
-              {previewNews && (
-                <div className="bg-[#0a0a0a] border border-emerald-500/30 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden animate-slideUp">
-                  <div className="flex justify-between items-start mb-6">
-                    <h3 className="text-lg font-black uppercase italic text-emerald-500">News Preview</h3>
-                    <button onClick={() => setPreviewNews(null)} className="text-gray-500 hover:text-white font-black text-xs uppercase">Close</button>
-                  </div>
-                  <div className="aspect-video w-full overflow-hidden rounded-2xl mb-6 bg-black border border-white/5">
-                    <img src={previewNews.image_url} alt={previewNews.title} className="w-full h-full object-cover" />
-                  </div>
-                  <h4 className="text-white font-black text-xl mb-4 leading-tight">{previewNews.title}</h4>
-                  <p className="text-gray-400 text-sm font-light leading-relaxed line-clamp-4 mb-6">{previewNews.summary}</p>
-                  <Link to={`/news/${previewNews.id}`} className="inline-block bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-3 rounded-xl font-black text-[10px] uppercase transition-all">Go to Detail →</Link>
-                </div>
-              )}
-
-              {/* 발행 폼 */}
               <div className="bg-neutral-900/40 border border-white/10 p-8 rounded-[2.5rem] shadow-2xl">
                 <h2 className="text-xl font-black mb-8 uppercase italic flex items-center gap-3"> Publish News </h2>
                 <form onSubmit={handleCreateNews} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">News Title</label>
-                    <input type="text" required value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none" placeholder="뉴스 제목 입력" />
+                  <input type="text" required value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none" placeholder="뉴스 제목 입력" />
+                  <select value={newsForm.category} onChange={e => setNewsForm({...newsForm, category: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none">
+                    <option value="NEWS">NEWS</option>
+                    <option value="공지">공지</option>
+                    <option value="리뷰">리뷰</option>
+                    <option value="Ai Trend">Ai Trend</option>
+                  </select>
+                  <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-video bg-black/40 border border-dashed border-white/10 rounded-xl flex items-center justify-center cursor-pointer overflow-hidden group relative">
+                    {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <span className="text-[9px] font-black text-gray-600 uppercase">Select Image</span>}
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Category</label>
-                    <select value={newsForm.category} onChange={e => setNewsForm({...newsForm, category: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none">
-                      <option value="NEWS">NEWS</option>
-                      <option value="공지">공지</option>
-                      <option value="리뷰">리뷰</option>
-                      <option value="Ai Trend">Ai Trend</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Cover Image</label>
-                    <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-video bg-black/40 border border-dashed border-white/10 rounded-xl flex items-center justify-center cursor-pointer overflow-hidden group relative">
-                      {imagePreview ? (
-                        <img src={imagePreview} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-[9px] font-black text-gray-600 uppercase">Select Image</span>
-                      )}
-                    </div>
-                    <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Summary</label>
-                    <textarea value={newsForm.summary} onChange={e => setNewsForm({...newsForm, summary: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-24 resize-none" placeholder="짧은 요약글" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Content (Markdown)</label>
-                    <textarea required value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-48 resize-none" placeholder="본문 내용" />
-                  </div>
-                  <button type="submit" disabled={isPublishing} className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl uppercase tracking-widest text-xs hover:bg-white transition-all disabled:opacity-50">
+                  <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                  <textarea value={newsForm.summary} onChange={e => setNewsForm({...newsForm, summary: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-24 resize-none" placeholder="짧은 요약글" />
+                  <textarea required value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-48 resize-none" placeholder="본문 내용" />
+                  <button type="submit" disabled={isPublishing} className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl uppercase tracking-widest text-xs hover:bg-white transition-all">
                     {isPublishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
                   </button>
                 </form>
@@ -557,29 +676,21 @@ const Admin: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {currentPagedNews.map(n => (
-                      <tr key={n.id} 
-                        onClick={() => setPreviewNews(n)}
-                        className={`group cursor-pointer hover:bg-white/[0.03] transition-all ${previewNews?.id === n.id ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}
-                      >
+                      <tr key={n.id} className="group hover:bg-white/[0.03] transition-all">
                         <td className="px-8 py-4 w-24">
                           <div className="size-12 rounded-lg overflow-hidden border border-white/5 bg-black">
-                            <img src={n.image_url} alt={n.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                            <img src={n.image_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
                           </div>
                         </td>
                         <td className="px-8 py-6">
-                          <p className={`font-bold text-sm transition-colors ${previewNews?.id === n.id ? 'text-emerald-500' : 'text-white group-hover:text-emerald-400'}`}>{n.title}</p>
+                          <p className="font-bold text-sm text-white">{n.title}</p>
                           <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mt-1">{n.category} • {n.date}</p>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <button onClick={(e) => { e.stopPropagation(); deleteNews(n.id); }} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase">Delete</button>
+                          <button onClick={() => deleteNews(n.id)} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase">Delete</button>
                         </td>
                       </tr>
                     ))}
-                    {news.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-8 py-20 text-center text-gray-600 text-[10px] font-black uppercase tracking-[0.4em]">No news items found.</td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
                 <PaginationUI />
