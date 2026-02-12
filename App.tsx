@@ -14,6 +14,7 @@ import VettingReport from './pages/VettingReport';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Admin from './pages/Admin';
+import AdminUserDetail from './pages/AdminUserDetail';
 import News from './pages/News';
 import NewsDetail from './pages/NewsDetail';
 import { supabase, isConfigured } from './lib/supabase';
@@ -148,6 +149,7 @@ const App: React.FC = () => {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/admin/user/:userId" element={<AdminUserDetail />} />
             </Routes>
           </main>
           

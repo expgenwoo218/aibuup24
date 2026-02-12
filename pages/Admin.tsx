@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
@@ -77,7 +78,7 @@ const Admin: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'posts') {
-        const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+        const { data } = await supabase.from('posts').select('*, profiles(email)').order('created_at', { ascending: false });
         setPosts(data || []);
       } else if (activeTab === 'users') {
         const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -368,7 +369,7 @@ const Admin: React.FC = () => {
                 <thead>
                   <tr className="border-b border-white/5 text-[10px] text-gray-600 uppercase font-black tracking-widest">
                     <th className="px-8 py-6">Title</th>
-                    <th className="px-8 py-6">Author</th>
+                    <th className="px-8 py-6">Author & Email</th>
                     <th className="px-8 py-6">Category</th>
                     <th className="px-8 py-6 text-right">Action</th>
                   </tr>
@@ -379,7 +380,12 @@ const Admin: React.FC = () => {
                       <td className="px-8 py-6">
                         <Link to={`/community/${post.id}`} className="font-bold text-sm line-clamp-1 hover:text-emerald-400 transition-colors">{post.title}</Link>
                       </td>
-                      <td className="px-8 py-6 text-xs text-gray-500">{post.author}</td>
+                      <td className="px-8 py-6">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-white font-bold">{post.author}</span>
+                          <span className="text-[10px] text-gray-500">{(post as any).profiles?.email || 'N/A'}</span>
+                        </div>
+                      </td>
                       <td className="px-8 py-6">
                         <span className="text-[9px] font-black px-3 py-1 bg-white/5 border border-white/10 rounded-full uppercase text-gray-400">{post.category}</span>
                       </td>
@@ -413,10 +419,10 @@ const Admin: React.FC = () => {
                   {currentPagedUsers.map(p => (
                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-8 py-6">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm text-white">{p.nickname}</span>
+                        <Link to={`/admin/user/${p.id}`} className="flex flex-col group/user">
+                          <span className="font-bold text-sm text-white group-hover/user:text-emerald-400 transition-colors">{p.nickname}</span>
                           <span className="text-[10px] text-gray-500">{p.email}</span>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-8 py-6 text-[11px] text-gray-500">
                         {new Date(p.created_at).toLocaleDateString()}
