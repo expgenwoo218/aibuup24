@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
     result text,
     daily_time text,
     likes integer DEFAULT 0,
-    user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
     tool text,
     cost text,
     score integer DEFAULT 5

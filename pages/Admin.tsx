@@ -78,8 +78,17 @@ const Admin: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'posts') {
-        const { data } = await supabase.from('posts').select('*, profiles(email)').order('created_at', { ascending: false });
-        setPosts(data || []);
+        // profiles 테이블과의 조인을 시도합니다.
+        const { data, error } = await supabase.from('posts').select('*, profiles(email)').order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Post join fetch error, falling back to simple fetch:', error);
+          // 조인이 실패할 경우(FK 설정 등 문제) 기본 정보만 가져옵니다.
+          const { data: fallbackData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+          setPosts(fallbackData || []);
+        } else {
+          setPosts(data || []);
+        }
       } else if (activeTab === 'users') {
         const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         setProfiles(data || []);
