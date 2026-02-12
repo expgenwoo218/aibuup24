@@ -78,14 +78,14 @@ const Admin: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'posts') {
-        // profiles 테이블과의 조인을 명시적으로 author_profile 별칭으로 가져옵니다.
+        // profiles 테이블과 조인하여 이메일 정보를 가져옵니다.
         const { data, error } = await supabase
           .from('posts')
-          .select('*, author_profile:profiles!user_id(email)')
+          .select('*, profiles(email)')
           .order('created_at', { ascending: false });
         
         if (error) {
-          console.error('Post join fetch error, falling back to simple fetch:', error);
+          console.error('Post fetch error:', error);
           const { data: fallbackData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
           setPosts(fallbackData || []);
         } else {
@@ -282,13 +282,17 @@ const Admin: React.FC = () => {
 
   // 이메일 추출을 위한 헬퍼 함수
   const getAuthorEmail = (post: any) => {
-    const profile = post.author_profile;
-    if (!profile) return 'N/A';
-    // Supabase 조인이 배열로 올 수도 있고 객체로 올 수도 있어 둘 다 처리합니다.
-    if (Array.isArray(profile)) {
-      return profile[0]?.email || 'N/A';
+    // Supabase 조인은 테이블 명칭인 'profiles' 키로 데이터가 들어옵니다.
+    const profileData = post.profiles;
+    if (!profileData) return 'N/A';
+    
+    // 배열로 반환된 경우 (PostgREST 버전에 따라 다를 수 있음)
+    if (Array.isArray(profileData)) {
+      return profileData[0]?.email || 'N/A';
     }
-    return profile.email || 'N/A';
+    
+    // 객체로 반환된 경우
+    return profileData.email || 'N/A';
   };
 
   if (loading && activeTab !== 'questions' && activeTab !== 'news') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
