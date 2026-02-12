@@ -36,6 +36,9 @@ const CommunityDirectWrite: React.FC = () => {
   useEffect(() => {
     if (isEdit) {
       fetchPostForEdit();
+    } else {
+      // 새 글 작성 시 초기 카테고리에 대한 템플릿 로드
+      loadCategoryTemplate(formData.category);
     }
   }, [id]);
 
@@ -46,7 +49,6 @@ const CommunityDirectWrite: React.FC = () => {
       const { data, error } = await supabase.from('posts').select('*').eq('id', id).single();
       if (error) throw error;
       if (data) {
-        // 권한 확인: 작성자 본인 혹은 관리자만 수정 가능
         if (data.user_id !== user?.id && profile?.role !== 'ADMIN') {
           alert('수정 권한이 없습니다.');
           navigate('/community');
@@ -68,6 +70,45 @@ const CommunityDirectWrite: React.FC = () => {
       navigate('/community');
     } finally {
       setFetching(false);
+    }
+  };
+
+  // 카테고리 질문지 기반 마크다운 템플릿 생성 및 적용
+  const loadCategoryTemplate = async (categoryName: string) => {
+    if (isEdit) return; // 수정 모드일 때는 기존 내용을 유지함
+
+    try {
+      const { data, error } = await supabase
+        .from('chat_questions')
+        .select('question_text')
+        .eq('category', categoryName)
+        .order('order_index', { ascending: true });
+      
+      if (error) throw error;
+
+      let template = `## 📊 ${categoryName} Intelligence Report\n\n`;
+      
+      if (data && data.length > 0) {
+        data.forEach((q) => {
+          template += `### 🔍 ${q.question_text}\n> \n\n`;
+        });
+      } else {
+        template += `### 🔍 제목을 입력해주세요.\n> \n\n### 🔍 상세 내용을 기록해주세요.\n> \n\n`;
+      }
+      
+      setFormData(prev => ({ ...prev, content: template }));
+    } catch (err) {
+      console.error("Template load error:", err);
+    }
+  };
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCat = e.target.value as BoardCategoryType;
+    setFormData(prev => ({ ...prev, category: newCat }));
+    
+    // 본문이 비어있거나 제목 줄만 있는 경우 템플릿 자동 완성 실행
+    if (!isEdit && (formData.content.trim() === '' || formData.content.startsWith('## 📊'))) {
+      loadCategoryTemplate(newCat);
     }
   };
 
@@ -160,7 +201,7 @@ const CommunityDirectWrite: React.FC = () => {
                 <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Archive Category</label>
                 <select 
                   value={formData.category}
-                  onChange={e => setFormData({...formData, category: e.target.value as BoardCategoryType})}
+                  onChange={handleCategoryChange}
                   className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-emerald-500/50 transition-all text-white appearance-none"
                 >
                   <optgroup label="일반 게시판" className="bg-neutral-900">

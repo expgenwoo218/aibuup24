@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
 import { UserContext } from '../App';
@@ -41,7 +41,17 @@ const AdminUserDetail: React.FC = () => {
   const [postCategory, setPostCategory] = useState('Ai부업경험담');
   const [postContent, setPostContent] = useState('');
 
-  const allCategories = [...BOARD_CATEGORIES.map(c => c.name), ...VIP_CATEGORIES.map(v => v.name)].filter(n => n !== '전체');
+  // 대상 회원의 등급에 따라 선택 가능한 카테고리 필터링
+  const availableCategories = useMemo(() => {
+    const standard = BOARD_CATEGORIES.map(c => c.name).filter(n => n !== '전체');
+    if (!userProfile) return standard;
+    
+    // 대상 회원이 GOLD 혹은 ADMIN인 경우에만 VIP 카테고리 허용
+    if (userProfile.role === 'GOLD' || userProfile.role === 'ADMIN') {
+      return [...standard, ...VIP_CATEGORIES.map(v => v.name)];
+    }
+    return standard;
+  }, [userProfile]);
 
   useEffect(() => {
     if (profile && profile.role !== 'ADMIN') {
@@ -63,6 +73,11 @@ const AdminUserDetail: React.FC = () => {
       setUserProfile(pData);
       if (pData?.persona_memo) {
         setPersonaMemo(pData.persona_memo);
+      }
+      
+      // 등급에 따른 초기 카테고리 설정 (SILVER 회원이면 일반 카테고리로 강제)
+      if (pData?.role === 'SILVER') {
+        setPostCategory('Ai부업경험담');
       }
 
       // 2. 작성한 게시글
@@ -171,7 +186,7 @@ const AdminUserDetail: React.FC = () => {
     <div className="min-h-screen bg-black pt-12 pb-32 px-6">
       <div className="max-w-7xl mx-auto">
         <header className="mb-12">
-          <Link to="/admin" className="text-gray-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest mb-4 inline-block">← Back to Admin Panel</Link>
+          <Link to="/admin?tab=users" className="text-gray-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest mb-4 inline-block">← 뒤로가기</Link>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
               <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-2 uppercase italic">{userProfile.nickname} <span className="text-emerald-500/50 text-2xl">Profile Audit</span></h1>
@@ -232,13 +247,13 @@ const AdminUserDetail: React.FC = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Category</label>
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Category {userProfile.role === 'SILVER' && <span className="text-[8px] text-red-500 ml-1 italic">(Silver restricted to Standard)</span>}</label>
                       <select 
                         value={postCategory}
                         onChange={(e) => setPostCategory(e.target.value)}
                         className="w-full bg-black/50 border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none appearance-none"
                       >
-                        {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                       </select>
                     </div>
                   </div>

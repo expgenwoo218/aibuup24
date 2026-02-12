@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, isConfigured } from '../lib/supabase';
 import { CommunityPost, NewsItem } from '../types';
 import { UserContext } from '../App';
@@ -26,12 +26,20 @@ interface ChatQuestion {
 const Admin: React.FC = () => {
   const { user, profile } = useContext(UserContext);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'news' | 'questions' | 'auto_post'>('posts');
+  
+  // 탭 상태 초기화: URL 파라미터가 있으면 해당 탭 사용, 없으면 'posts'
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'news' | 'questions' | 'auto_post'>(
+    (tabFromUrl === 'users' || tabFromUrl === 'news' || tabFromUrl === 'questions' || tabFromUrl === 'auto_post' || tabFromUrl === 'posts') 
+      ? tabFromUrl as any 
+      : 'posts'
+  );
   
   // 페이지네이션 상태
   const [currentPage, setCurrentPage] = useState(1);
@@ -70,6 +78,15 @@ const Admin: React.FC = () => {
     content: '',
     image_url: ''
   });
+  const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
+
+  // URL 파라미터 변경 감지하여 탭 업데이트
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['posts', 'users', 'news', 'questions', 'auto_post'].includes(tab)) {
+      setActiveTab(tab as any);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!user && !loading) {
@@ -339,16 +356,55 @@ const Admin: React.FC = () => {
     e.preventDefault();
     setIsPublishing(true);
     try {
-      const { data, error } = await supabase.from('news').insert([{
-        ...newsForm,
-        date: new Date().toLocaleDateString()
-      }]).select().single();
-      if (error) throw error;
-      setNews(prev => [data, ...prev]);
+      if (editingNewsId) {
+        // 기존 뉴스 수정
+        const { error } = await supabase
+          .from('news')
+          .update({
+            title: newsForm.title,
+            category: newsForm.category,
+            summary: newsForm.summary,
+            content: newsForm.content,
+            image_url: newsForm.image_url
+          })
+          .eq('id', editingNewsId);
+
+        if (error) throw error;
+        alert('뉴스 수정 성공!');
+      } else {
+        // 새 뉴스 발행
+        const { data, error } = await supabase.from('news').insert([{
+          ...newsForm,
+          date: new Date().toLocaleDateString()
+        }]).select().single();
+        if (error) throw error;
+        setNews(prev => [data, ...prev]);
+        alert('뉴스 발행 성공!');
+      }
+      
+      // 상태 초기화
       setNewsForm({ title: '', category: 'NEWS', summary: '', content: '', image_url: '' });
       setImagePreview(null);
-      alert('뉴스 발행 성공!');
-    } catch (err: any) { alert('에러: ' + err.message); } finally { setIsPublishing(false); }
+      setEditingNewsId(null);
+      fetchAdminData();
+    } catch (err: any) { 
+      alert('에러: ' + err.message); 
+    } finally { 
+      setIsPublishing(false); 
+    }
+  };
+
+  const startEditNews = (n: NewsItem) => {
+    setNewsForm({
+      title: n.title,
+      category: n.category,
+      summary: n.summary,
+      content: n.content,
+      image_url: n.image_url
+    });
+    setImagePreview(n.image_url);
+    setEditingNewsId(n.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const updateUserRole = async (userId: string, newRole: string) => {
@@ -708,7 +764,7 @@ const Admin: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn">
             <div className="lg:col-span-1 space-y-8">
               <div className="bg-neutral-900/40 border border-white/10 p-8 rounded-[2.5rem] shadow-2xl">
-                <h2 className="text-xl font-black mb-8 uppercase italic flex items-center gap-3"> Publish News </h2>
+                <h2 className="text-xl font-black mb-8 uppercase italic flex items-center gap-3"> {editingNewsId ? 'Edit News' : 'Publish News'} </h2>
                 <form onSubmit={handleCreateNews} className="space-y-5">
                   <input type="text" required value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none" placeholder="뉴스 제목 입력" />
                   <select value={newsForm.category} onChange={e => setNewsForm({...newsForm, category: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none">
@@ -724,8 +780,17 @@ const Admin: React.FC = () => {
                   <textarea value={newsForm.summary} onChange={e => setNewsForm({...newsForm, summary: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-24 resize-none" placeholder="짧은 요약글" />
                   <textarea required value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-48 resize-none" placeholder="본문 내용" />
                   <button type="submit" disabled={isPublishing} className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl uppercase tracking-widest text-xs hover:bg-white transition-all">
-                    {isPublishing ? 'PUBLISHING...' : 'PUBLISH NOW'}
+                    {isPublishing ? (editingNewsId ? 'UPDATING...' : 'PUBLISHING...') : (editingNewsId ? 'UPDATE NEWS' : 'PUBLISH NOW')}
                   </button>
+                  {editingNewsId && (
+                    <button type="button" onClick={() => {
+                      setEditingNewsId(null);
+                      setNewsForm({ title: '', category: 'NEWS', summary: '', content: '', image_url: '' });
+                      setImagePreview(null);
+                    }} className="w-full mt-2 bg-white/5 border border-white/10 text-gray-500 font-black py-3 rounded-xl uppercase tracking-widest text-[10px] hover:text-white transition-all">
+                      Cancel Edit
+                    </button>
+                  )}
                 </form>
               </div>
             </div>
@@ -752,7 +817,10 @@ const Admin: React.FC = () => {
                           <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest mt-1">{n.category} • {n.date}</p>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <button onClick={() => deleteNews(n.id)} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase">Delete</button>
+                          <div className="flex items-center justify-end gap-3">
+                            <button onClick={() => startEditNews(n)} className="text-emerald-500 hover:text-white font-bold text-[10px] uppercase transition-colors">Edit</button>
+                            <button onClick={() => deleteNews(n.id)} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase transition-colors">Delete</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
