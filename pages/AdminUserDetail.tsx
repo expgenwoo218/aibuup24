@@ -11,6 +11,7 @@ interface UserProfile {
   nickname: string;
   role: string;
   created_at: string;
+  persona_memo?: string;
 }
 
 interface UserComment {
@@ -30,6 +31,8 @@ const AdminUserDetail: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userPosts, setUserPosts] = useState<CommunityPost[]>([]);
   const [userComments, setUserComments] = useState<UserComment[]>([]);
+  const [personaMemo, setPersonaMemo] = useState('');
+  const [isSavingMemo, setIsSavingMemo] = useState(false);
 
   useEffect(() => {
     if (profile && profile.role !== 'ADMIN') {
@@ -49,6 +52,9 @@ const AdminUserDetail: React.FC = () => {
       // 1. 프로필 정보
       const { data: pData } = await supabase.from('profiles').select('*').eq('id', userId).single();
       setUserProfile(pData);
+      if (pData?.persona_memo) {
+        setPersonaMemo(pData.persona_memo);
+      }
 
       // 2. 작성한 게시글
       const { data: postsData } = await supabase
@@ -83,6 +89,24 @@ const AdminUserDetail: React.FC = () => {
     }
   };
 
+  const handleSaveMemo = async () => {
+    if (!userId || isSavingMemo) return;
+    setIsSavingMemo(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ persona_memo: personaMemo })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      alert('페르소나 메모가 저장되었습니다.');
+    } catch (err: any) {
+      alert('메모 저장 실패: ' + err.message);
+    } finally {
+      setIsSavingMemo(false);
+    }
+  };
+
   if (loading) return (
     <div className="pt-48 pb-32 min-h-screen bg-black flex items-center justify-center">
       <div className="text-emerald-500 font-black animate-pulse">RECONSTRUCTING MEMBER ACTIVITY...</div>
@@ -112,6 +136,31 @@ const AdminUserDetail: React.FC = () => {
             </div>
           </div>
         </header>
+
+        {/* 페르소나 메모 섹션 */}
+        <section className="mb-12">
+          <div className="bg-[#0a0a0a] border border-emerald-500/20 rounded-[2.5rem] p-8 md:p-10 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 size-64 bg-emerald-500/5 blur-[100px] pointer-events-none" />
+            <div className="flex items-center justify-between mb-6 relative z-10">
+              <h2 className="text-xl font-black uppercase italic tracking-tight flex items-center gap-3">
+                <span className="text-emerald-500">📝</span> Persona Memo <span className="text-[10px] text-gray-600 italic">(Admin Only)</span>
+              </h2>
+              <button 
+                onClick={handleSaveMemo}
+                disabled={isSavingMemo}
+                className="bg-emerald-500 text-black px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-white transition-all disabled:opacity-50"
+              >
+                {isSavingMemo ? 'Saving...' : 'Save Memo'}
+              </button>
+            </div>
+            <textarea 
+              value={personaMemo}
+              onChange={(e) => setPersonaMemo(e.target.value)}
+              placeholder="해당 회원의 페르소나, 특이사항, 관리 기록 등을 자유롭게 메모하세요..."
+              className="w-full bg-black/50 border border-white/5 rounded-2xl p-6 text-gray-300 text-sm outline-none focus:border-emerald-500/30 transition-all min-h-[150px] resize-none leading-relaxed relative z-10"
+            />
+          </div>
+        </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* 게시글 목록 */}

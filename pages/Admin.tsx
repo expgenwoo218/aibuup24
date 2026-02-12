@@ -13,6 +13,7 @@ interface Profile {
   nickname: string;
   role: 'ADMIN' | 'GOLD' | 'SILVER';
   created_at: string;
+  persona_memo?: string;
 }
 
 interface ChatQuestion {
@@ -44,6 +45,9 @@ const Admin: React.FC = () => {
   // 자동 게시글 생성 상태
   const [autoPostEmail, setAutoPostEmail] = useState('');
   const [autoPostCategory, setAutoPostCategory] = useState('Ai부업경험담');
+  const [isManualMode, setIsManualMode] = useState(false);
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualContent, setManualContent] = useState('');
   const [persona, setPersona] = useState({
     level: '초보',
     scam: '피해 없음',
@@ -94,7 +98,7 @@ const Admin: React.FC = () => {
           .select('*, profiles(email)')
           .order('created_at', { ascending: false });
         
-        const { data: profilesData } = await supabase.from('profiles').select('id, email');
+        const { data: profilesData } = await supabase.from('profiles').select('id, email, persona_memo');
         if (profilesData) setProfiles(profilesData as any);
 
         if (postsError) {
@@ -125,6 +129,8 @@ const Admin: React.FC = () => {
 
   const handleAutoPostGenerate = async () => {
     if (!autoPostEmail.trim()) return alert('발행 대상 이메일을 입력해주세요.');
+    if (isManualMode && (!manualTitle.trim() || !manualContent.trim())) return alert('제목과 내용을 입력해주세요.');
+    
     setIsPublishing(true);
 
     try {
@@ -137,54 +143,65 @@ const Admin: React.FC = () => {
 
       if (profileError || !targetProfile) throw new Error('해당 이메일을 가진 회원을 찾을 수 없습니다.');
 
-      // 2. 카테고리 질문지 조회
-      const { data: catQuestions } = await supabase
-        .from('chat_questions')
-        .select('question_text')
-        .eq('category', autoPostCategory)
-        .order('order_index', { ascending: true });
+      let finalTitle = '';
+      let finalContent = '';
 
-      const questionTexts = catQuestions?.map(q => q.question_text) || ["제목을 정해주세요.", "내용을 작성해주세요."];
+      if (isManualMode) {
+        // 직접 작성 모드
+        finalTitle = manualTitle;
+        finalContent = manualContent;
+      } else {
+        // AI 자동 생성 모드
+        // 2. 카테고리 질문지 조회
+        const { data: catQuestions } = await supabase
+          .from('chat_questions')
+          .select('question_text')
+          .eq('category', autoPostCategory)
+          .order('order_index', { ascending: true });
 
-      // 3. AI 답변 생성 (Gemini)
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `
-        당신은 지금부터 아래 페르소나를 가진 커뮤니티 사용자입니다.
-        페르소나: ${persona.level}, ${persona.scam}, ${persona.exp}, ${persona.attitude}, ${persona.job}, ${persona.marital}, ${persona.children}
+        const questionTexts = catQuestions?.map(q => q.question_text) || ["제목을 정해주세요.", "내용을 작성해주세요."];
+
+        // 3. AI 답변 생성 (Gemini)
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const prompt = `
+          당신은 지금부터 아래 페르소나를 가진 커뮤니티 사용자입니다.
+          페르소나: ${persona.level}, ${persona.scam}, ${persona.exp}, ${persona.attitude}, ${persona.job}, ${persona.marital}, ${persona.children}
+          
+          이 페르소나에 완벽히 빙의하여, 아래 질문들에 대해 자연스럽고 생생한 한국어 구어체로 답변을 작성해주세요. 
+          실제 사람이 쓴 것처럼 감정과 디테일이 살아있어야 합니다.
+          
+          질문 목록:
+          ${questionTexts.map((q, i) => `${i+1}. ${q}`).join('\n')}
+          
+          응답은 반드시 질문 순서대로 답변만 나열하되, 각 답변은 줄바꿈으로 구분해주세요.
+        `;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: prompt,
+        });
+
+        const aiAnswers = response.text.split('\n').filter(line => line.trim().length > 0);
         
-        이 페르소나에 완벽히 빙의하여, 아래 질문들에 대해 자연스럽고 생생한 한국어 구어체로 답변을 작성해주세요. 
-        실제 사람이 쓴 것처럼 감정과 디테일이 살아있어야 합니다.
+        // 4. 리포트 본문 구성
+        finalTitle = aiAnswers[0]?.slice(0, 50) || `[${autoPostCategory}] AI 자동 생성 리포트`;
+        finalContent = `## 📊 AI Generated Intelligence Report\n\n`;
+        finalContent += `> **Auditor Persona**: ${persona.level} 모험가 / ${persona.job} / ${persona.exp}\n\n`;
         
-        질문 목록:
-        ${questionTexts.map((q, i) => `${i+1}. ${q}`).join('\n')}
-        
-        응답은 반드시 질문 순서대로 답변만 나열하되, 각 답변은 줄바꿈으로 구분해주세요.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-      });
-
-      const aiAnswers = response.text.split('\n').filter(line => line.trim().length > 0);
-      
-      // 4. 리포트 본문 구성
-      let reportContent = `## 📊 AI Generated Intelligence Report\n\n`;
-      reportContent += `> **Auditor Persona**: ${persona.level} 모험가 / ${persona.job} / ${persona.exp}\n\n`;
-      
-      questionTexts.forEach((q, i) => {
-        reportContent += `### 🔍 ${q}\n> ${aiAnswers[i] || 'AI가 답변을 생성하지 못했습니다.'}\n\n`;
-      });
+        questionTexts.forEach((q, i) => {
+          finalContent += `### 🔍 ${q}\n> ${aiAnswers[i] || 'AI가 답변을 생성하지 못했습니다.'}\n\n`;
+        });
+      }
 
       // 5. 게시글 등록
       const postData = {
-        title: aiAnswers[0]?.slice(0, 50) || `[${autoPostCategory}] AI 자동 생성 리포트`,
+        title: finalTitle,
         author: targetProfile.nickname,
         category: autoPostCategory,
-        content: reportContent,
-        result: 'AI Verified Archive',
+        content: finalContent,
+        result: isManualMode ? 'Direct Entry' : 'AI Verified Archive',
         user_id: targetProfile.id,
-        tool: 'Gemini AI Integration',
+        tool: isManualMode ? 'Manual Admin Action' : 'Gemini AI Integration',
         daily_time: 'N/A',
         created_at: new Date().toISOString(),
         likes: Math.floor(Math.random() * 5)
@@ -195,6 +212,8 @@ const Admin: React.FC = () => {
 
       alert(`${targetProfile.nickname} 님의 이름으로 글이 성공적으로 발행되었습니다.`);
       setAutoPostEmail('');
+      setManualTitle('');
+      setManualContent('');
       setActiveTab('posts');
     } catch (err: any) {
       alert('오류 발생: ' + err.message);
@@ -391,9 +410,27 @@ const Admin: React.FC = () => {
         {activeTab === 'auto_post' && (
           <div className="animate-fadeIn max-w-4xl mx-auto">
             <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl">
-              <h2 className="text-2xl font-black uppercase italic mb-8 flex items-center gap-3">
-                <span className="text-emerald-500">🤖</span> AI Auto-Publisher
-              </h2>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                <h2 className="text-2xl font-black uppercase italic flex items-center gap-3">
+                  <span className="text-emerald-500">🤖</span> Publisher Control
+                </h2>
+                
+                {/* 모드 전환 토글 */}
+                <div className="flex bg-black/50 border border-white/10 p-1 rounded-xl">
+                  <button 
+                    onClick={() => setIsManualMode(false)}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!isManualMode ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-gray-500 hover:text-white'}`}
+                  >
+                    AI Auto
+                  </button>
+                  <button 
+                    onClick={() => setIsManualMode(true)}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isManualMode ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'text-gray-500 hover:text-white'}`}
+                  >
+                    Direct Write
+                  </button>
+                </div>
+              </div>
               
               <div className="space-y-8">
                 {/* 대상 회원 이메일 및 카테고리 */}
@@ -420,77 +457,105 @@ const Admin: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 페르소나 설정 섹션 */}
-                <div className="bg-white/5 rounded-3xl p-8 border border-white/5">
-                  <h3 className="text-xs font-black text-emerald-500 uppercase tracking-[0.3em] mb-6 italic">Persona Configuration</h3>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* 레벨 */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">숙련도</label>
-                      <div className="flex gap-2">
-                        {['초보', '중수', '고수'].map(v => (
-                          <button key={v} onClick={() => setPersona({...persona, level: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.level === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                        ))}
+                {isManualMode ? (
+                  /* 직접 작성 모드 UI */
+                  <div className="bg-white/5 rounded-3xl p-8 border border-white/5 animate-fadeIn">
+                    <h3 className="text-xs font-black text-emerald-500 uppercase tracking-[0.3em] mb-6 italic">Direct Content Entry</h3>
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Post Title</label>
+                        <input 
+                          type="text"
+                          value={manualTitle}
+                          onChange={(e) => setManualTitle(e.target.value)}
+                          placeholder="발행할 제목을 입력하세요"
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none"
+                        />
                       </div>
-                    </div>
-                    {/* 강팔이 피해 */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">강팔이 피해</label>
-                      <div className="flex gap-2">
-                        {['피해 있음', '피해 없음'].map(v => (
-                          <button key={v} onClick={() => setPersona({...persona, scam: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.scam === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* 부업 경험 */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">부업 경험</label>
-                      <div className="flex gap-2">
-                        {['성공경험', '실패경험', '미경험'].map(v => (
-                          <button key={v} onClick={() => setPersona({...persona, exp: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.exp === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* 성향 */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">부업 성향</label>
-                      <div className="flex gap-2">
-                        {['긍정적', '부정적'].map(v => (
-                          <button key={v} onClick={() => setPersona({...persona, attitude: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.attitude === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* 결혼 */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">결혼 상태</label>
-                      <div className="flex gap-2">
-                        {['미혼', '기혼'].map(v => (
-                          <button key={v} onClick={() => setPersona({...persona, marital: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.marital === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* 자녀 */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">자녀 유무</label>
-                      <div className="flex gap-2">
-                        {['자녀 있음', '자녀 없음'].map(v => (
-                          <button key={v} onClick={() => setPersona({...persona, children: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.children === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                        ))}
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Content Body (Markdown Support)</label>
+                        <textarea 
+                          value={manualContent}
+                          onChange={(e) => setManualContent(e.target.value)}
+                          placeholder="발행할 내용을 입력하세요. 마크다운 문법을 지원합니다."
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none h-64 resize-none leading-relaxed"
+                        />
                       </div>
                     </div>
                   </div>
+                ) : (
+                  /* 페르소나 설정 섹션 (AI 모드) */
+                  <div className="bg-white/5 rounded-3xl p-8 border border-white/5 animate-fadeIn">
+                    <h3 className="text-xs font-black text-emerald-500 uppercase tracking-[0.3em] mb-6 italic">Persona Configuration</h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {/* 레벨 */}
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">숙련도</label>
+                        <div className="flex gap-2">
+                          {['초보', '중수', '고수'].map(v => (
+                            <button key={v} onClick={() => setPersona({...persona, level: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.level === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* 강팔이 피해 */}
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">강팔이 피해</label>
+                        <div className="flex gap-2">
+                          {['피해 있음', '피해 없음'].map(v => (
+                            <button key={v} onClick={() => setPersona({...persona, scam: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.scam === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* 부업 경험 */}
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">부업 경험</label>
+                        <div className="flex gap-2">
+                          {['성공경험', '실패경험', '미경험'].map(v => (
+                            <button key={v} onClick={() => setPersona({...persona, exp: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.exp === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* 성향 */}
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">부업 성향</label>
+                        <div className="flex gap-2">
+                          {['긍정적', '부정적'].map(v => (
+                            <button key={v} onClick={() => setPersona({...persona, attitude: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.attitude === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* 결혼 */}
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">결혼 상태</label>
+                        <div className="flex gap-2">
+                          {['미혼', '기혼'].map(v => (
+                            <button key={v} onClick={() => setPersona({...persona, marital: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.marital === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* 자녀 */}
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">자녀 유무</label>
+                        <div className="flex gap-2">
+                          {['자녀 있음', '자녀 없음'].map(v => (
+                            <button key={v} onClick={() => setPersona({...persona, children: v})} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.children === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
 
-                  {/* 직업 성향 (길어서 따로 처리) */}
-                  <div className="mt-8 space-y-3">
-                    <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">직업군</label>
-                    <div className="flex flex-wrap gap-2">
-                      {['직장인', '사업자', '1인 창업', '주부', '학생', '은퇴자', '백수'].map(v => (
-                        <button key={v} onClick={() => setPersona({...persona, job: v})} className={`px-4 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.job === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
-                      ))}
+                    {/* 직업 성향 (길어서 따로 처리) */}
+                    <div className="mt-8 space-y-3">
+                      <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest">직업군</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['직장인', '사업자', '1인 창업', '주부', '학생', '은퇴자', '백수'].map(v => (
+                          <button key={v} onClick={() => setPersona({...persona, job: v})} className={`px-4 py-2 rounded-lg text-[10px] font-black border transition-all ${persona.job === v ? 'bg-white text-black border-white' : 'bg-black/40 border-white/5 text-gray-500'}`}>{v}</button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <button 
                   onClick={handleAutoPostGenerate}
@@ -498,8 +563,8 @@ const Admin: React.FC = () => {
                   className="w-full bg-emerald-500 text-black font-black py-6 rounded-2xl uppercase tracking-[0.3em] text-sm hover:bg-white transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-4 disabled:opacity-50"
                 >
                   {isPublishing ? (
-                    <><div className="size-5 border-2 border-black/20 border-t-black rounded-full animate-spin" /> GENERATING INTELLIGENCE...</>
-                  ) : 'AI 답변 생성 및 글 발행'}
+                    <><div className="size-5 border-2 border-black/20 border-t-black rounded-full animate-spin" /> {isManualMode ? 'PUBLISHING...' : 'GENERATING INTELLIGENCE...'}</>
+                  ) : isManualMode ? '즉시 발행하기' : 'AI 답변 생성 및 글 발행'}
                 </button>
               </div>
             </div>
@@ -684,7 +749,7 @@ const Admin: React.FC = () => {
                         </td>
                         <td className="px-8 py-6">
                           <p className="font-bold text-sm text-white">{n.title}</p>
-                          <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mt-1">{n.category} • {n.date}</p>
+                          <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest mt-1">{n.category} • {n.date}</p>
                         </td>
                         <td className="px-8 py-6 text-right">
                           <button onClick={() => deleteNews(n.id)} className="text-red-500/30 hover:text-red-500 font-bold text-[10px] uppercase">Delete</button>
