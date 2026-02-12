@@ -75,10 +75,10 @@ const AdminUserDetail: React.FC = () => {
         setPersonaMemo(pData.persona_memo);
       }
       
-      // 등급에 따른 초기 카테고리 설정 (SILVER 회원이면 일반 카테고리로 강제)
-      if (pData?.role === 'SILVER') {
-        setPostCategory('Ai부업경험담');
-      }
+      // 등급에 따른 초기 카테고리 설정
+      const initialCat = pData?.role === 'SILVER' ? 'Ai부업경험담' : 'Ai부업경험담';
+      setPostCategory(initialCat);
+      loadCategoryTemplate(initialCat);
 
       // 2. 작성한 게시글
       const { data: postsData } = await supabase
@@ -110,6 +110,43 @@ const AdminUserDetail: React.FC = () => {
       console.error('회원 활동 데이터 로드 오류:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 카테고리 질문지 기반 마크다운 템플릿 생성 및 적용
+  const loadCategoryTemplate = async (categoryName: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_questions')
+        .select('question_text')
+        .eq('category', categoryName)
+        .order('order_index', { ascending: true });
+      
+      if (error) throw error;
+
+      let template = `## 📊 ${categoryName} Intelligence Report\n\n`;
+      
+      if (data && data.length > 0) {
+        data.forEach((q) => {
+          template += `### 🔍 ${q.question_text}\n> \n\n`;
+        });
+      } else {
+        template += `### 🔍 제목을 입력해주세요.\n> \n\n### 🔍 상세 내용을 기록해주세요.\n> \n\n`;
+      }
+      
+      setPostContent(template);
+    } catch (err) {
+      console.error("Template load error:", err);
+    }
+  };
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCat = e.target.value;
+    setPostCategory(newCat);
+    
+    // 본문이 비어있거나 기존 템플릿 형태인 경우에만 템플릿 자동 교체
+    if (postContent.trim() === '' || postContent.startsWith('## 📊')) {
+      loadCategoryTemplate(newCat);
     }
   };
 
@@ -160,7 +197,8 @@ const AdminUserDetail: React.FC = () => {
 
       alert('게시글이 성공적으로 발행되었습니다.');
       setPostTitle('');
-      setPostContent('');
+      // 성공 후 템플릿 재설정
+      loadCategoryTemplate(postCategory);
       fetchUserActivity(); // 목록 갱신
     } catch (err: any) {
       alert('발행 실패: ' + err.message);
@@ -250,7 +288,7 @@ const AdminUserDetail: React.FC = () => {
                       <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest ml-1">Category {userProfile.role === 'SILVER' && <span className="text-[8px] text-red-500 ml-1 italic">(Silver restricted to Standard)</span>}</label>
                       <select 
                         value={postCategory}
-                        onChange={(e) => setPostCategory(e.target.value)}
+                        onChange={handleCategoryChange}
                         className="w-full bg-black/50 border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:border-emerald-500/50 outline-none appearance-none"
                       >
                         {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
