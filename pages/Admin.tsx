@@ -78,18 +78,22 @@ const Admin: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'posts') {
-        // profiles 테이블과 조인하여 이메일 정보를 가져옵니다.
-        const { data, error } = await supabase
+        // 1. 게시글과 조인된 프로필 정보 가져오기 시도
+        const { data: postsData, error: postsError } = await supabase
           .from('posts')
           .select('*, profiles(email)')
           .order('created_at', { ascending: false });
         
-        if (error) {
-          console.error('Post fetch error:', error);
+        // 2. 조인이 실패할 경우를 대비해 전체 회원 정보도 미리 가져옴 (매핑용)
+        const { data: profilesData } = await supabase.from('profiles').select('id, email');
+        if (profilesData) setProfiles(profilesData as any);
+
+        if (postsError) {
+          console.error('Post fetch error:', postsError);
           const { data: fallbackData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
           setPosts(fallbackData || []);
         } else {
-          setPosts(data || []);
+          setPosts(postsData || []);
         }
       } else if (activeTab === 'users') {
         const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -280,19 +284,20 @@ const Admin: React.FC = () => {
     }
   };
 
-  // 이메일 추출을 위한 헬퍼 함수
+  // 이메일 추출을 위한 가장 확실한 헬퍼 함수
   const getAuthorEmail = (post: any) => {
-    // Supabase 조인은 테이블 명칭인 'profiles' 키로 데이터가 들어옵니다.
-    const profileData = post.profiles;
-    if (!profileData) return 'N/A';
-    
-    // 배열로 반환된 경우 (PostgREST 버전에 따라 다를 수 있음)
-    if (Array.isArray(profileData)) {
-      return profileData[0]?.email || 'N/A';
+    // 1. Supabase 조인 결과 확인
+    const joinedProfile = post.profiles;
+    if (joinedProfile) {
+      if (Array.isArray(joinedProfile) && joinedProfile[0]?.email) return joinedProfile[0].email;
+      if (joinedProfile.email) return joinedProfile.email;
     }
-    
-    // 객체로 반환된 경우
-    return profileData.email || 'N/A';
+
+    // 2. 조인 결과가 없을 경우, 전체 로드된 profiles 리스트에서 직접 매핑 (사용자 요청 사항)
+    const foundProfile = profiles.find(p => p.id === post.user_id);
+    if (foundProfile) return foundProfile.email;
+
+    return 'N/A';
   };
 
   if (loading && activeTab !== 'questions' && activeTab !== 'news') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
