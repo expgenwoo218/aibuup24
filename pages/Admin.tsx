@@ -78,12 +78,14 @@ const Admin: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === 'posts') {
-        // profiles 테이블과의 조인을 시도합니다.
-        const { data, error } = await supabase.from('posts').select('*, profiles(email)').order('created_at', { ascending: false });
+        // profiles 테이블과의 조인을 명시적으로 author_profile 별칭으로 가져옵니다.
+        const { data, error } = await supabase
+          .from('posts')
+          .select('*, author_profile:profiles!user_id(email)')
+          .order('created_at', { ascending: false });
         
         if (error) {
           console.error('Post join fetch error, falling back to simple fetch:', error);
-          // 조인이 실패할 경우(FK 설정 등 문제) 기본 정보만 가져옵니다.
           const { data: fallbackData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
           setPosts(fallbackData || []);
         } else {
@@ -278,6 +280,17 @@ const Admin: React.FC = () => {
     }
   };
 
+  // 이메일 추출을 위한 헬퍼 함수
+  const getAuthorEmail = (post: any) => {
+    const profile = post.author_profile;
+    if (!profile) return 'N/A';
+    // Supabase 조인이 배열로 올 수도 있고 객체로 올 수도 있어 둘 다 처리합니다.
+    if (Array.isArray(profile)) {
+      return profile[0]?.email || 'N/A';
+    }
+    return profile.email || 'N/A';
+  };
+
   if (loading && activeTab !== 'questions' && activeTab !== 'news') return <div className="text-center pt-48 font-black text-emerald-500 animate-pulse">SYNCHRONIZING ADMIN INTERFACE...</div>;
 
   return (
@@ -392,7 +405,7 @@ const Admin: React.FC = () => {
                       <td className="px-8 py-6">
                         <div className="flex flex-col">
                           <span className="text-xs text-white font-bold">{post.author}</span>
-                          <span className="text-[10px] text-gray-500">{(post as any).profiles?.email || 'N/A'}</span>
+                          <span className="text-[10px] text-gray-500">{getAuthorEmail(post)}</span>
                         </div>
                       </td>
                       <td className="px-8 py-6">
