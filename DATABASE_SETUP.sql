@@ -1,15 +1,15 @@
 
--- 1. 회원 프로필 테이블 생성
+-- 1. 회원 프로필 테이블 생성 (기존 테이블 유지, 없으면 생성)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     email text NOT NULL,
     nickname text,
     role text DEFAULT 'SILVER' CHECK (role IN ('ADMIN', 'GOLD', 'SILVER')),
     created_at timestamptz DEFAULT now(),
-    persona_memo text -- 페르소나 메모 컬럼 추가
+    persona_memo text -- 이번에 추가된 페르소나 메모 컬럼
 );
 
--- 2. 관리자 확인을 위한 보안 정의자 함수 (RLS 무한 루프 방지)
+-- 2. 관리자 확인을 위한 보안 정의자 함수 (기존 기능 유지)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
 BEGIN
@@ -20,7 +20,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. 회원가입 시 자동으로 profiles에 기본 정보를 삽입하는 함수
+-- 3. 회원가입 시 자동으로 profiles에 기본 정보를 삽입하는 함수 (기존 기능 유지)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
@@ -50,7 +50,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 5. 게시글 테이블
+-- 5. 게시글 테이블 (기존 기능 유지)
 CREATE TABLE IF NOT EXISTS public.posts (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
     score integer DEFAULT 5
 );
 
--- 6. 댓글 테이블 (커뮤니티용)
+-- 6. 댓글 테이블 (기존 기능 유지)
 CREATE TABLE IF NOT EXISTS public.comments (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS public.comments (
     created_at timestamptz DEFAULT now()
 );
 
--- 7. 뉴스 테이블
+-- 7. 뉴스 테이블 (기존 기능 유지)
 CREATE TABLE IF NOT EXISTS public.news (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS public.news (
     image_url text NOT NULL
 );
 
--- 8. 연락처 테이블
+-- 8. 연락처 테이블 (기존 기능 유지)
 CREATE TABLE IF NOT EXISTS public.contacts (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS public.contacts (
     message text NOT NULL
 );
 
--- 11. 대화형 질문 관리 테이블 (추가됨)
+-- 11. 대화형 질문 관리 테이블 (기존 기능 유지)
 CREATE TABLE IF NOT EXISTS public.chat_questions (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     category text NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS public.chat_questions (
     created_at timestamptz DEFAULT now()
 );
 
--- 12. 뉴스 댓글 테이블 (추가됨)
+-- 12. 뉴스 댓글 테이블 (기존 기능 유지)
 CREATE TABLE IF NOT EXISTS public.news_comments (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     news_id uuid REFERENCES public.news(id) ON DELETE CASCADE,
@@ -128,9 +128,7 @@ ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.news_comments ENABLE ROW LEVEL SECURITY;
 
--- 10. 정책 설정
-
--- Profiles 정책
+-- 10. 정책 설정 (기존 모든 정책 재설정)
 DROP POLICY IF EXISTS "Public profiles viewable by everyone" ON public.profiles;
 CREATE POLICY "Public profiles viewable by everyone" ON public.profiles FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
@@ -138,7 +136,6 @@ CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING
 DROP POLICY IF EXISTS "Admins can manage all profiles" ON public.profiles;
 CREATE POLICY "Admins can manage all profiles" ON public.profiles FOR ALL USING (public.is_admin());
 
--- Posts 정책
 DROP POLICY IF EXISTS "Posts viewable by everyone" ON public.posts;
 CREATE POLICY "Posts viewable by everyone" ON public.posts FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Authenticated users insert posts" ON public.posts;
@@ -146,7 +143,6 @@ CREATE POLICY "Authenticated users insert posts" ON public.posts FOR INSERT WITH
 DROP POLICY IF EXISTS "Users modify own posts" ON public.posts;
 CREATE POLICY "Users modify own posts" ON public.posts FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
--- Comments 정책
 DROP POLICY IF EXISTS "Comments viewable by everyone" ON public.comments;
 CREATE POLICY "Comments viewable by everyone" ON public.comments FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Authenticated users insert comments" ON public.comments;
@@ -154,25 +150,21 @@ CREATE POLICY "Authenticated users insert comments" ON public.comments FOR INSER
 DROP POLICY IF EXISTS "Users modify own comments" ON public.comments;
 CREATE POLICY "Users modify own comments" ON public.comments FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
--- News 정책
 DROP POLICY IF EXISTS "News viewable by everyone" ON public.news;
 CREATE POLICY "News viewable by everyone" ON public.news FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admins manage news" ON public.news;
 CREATE POLICY "Admins manage news" ON public.news FOR ALL USING (public.is_admin());
 
--- Contacts 정책
 DROP POLICY IF EXISTS "Anyone can insert contacts" ON public.contacts;
 CREATE POLICY "Anyone can insert contacts" ON public.contacts FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Admins can view contacts" ON public.contacts;
 CREATE POLICY "Admins can view contacts" ON public.contacts FOR SELECT USING (public.is_admin());
 
--- Chat Questions 정책
 DROP POLICY IF EXISTS "Anyone can view chat questions" ON public.chat_questions;
 CREATE POLICY "Anyone can view chat questions" ON public.chat_questions FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admins can manage chat questions" ON public.chat_questions;
 CREATE POLICY "Admins can manage chat questions" ON public.chat_questions FOR ALL USING (public.is_admin());
 
--- News Comments 정책 (추가됨)
 DROP POLICY IF EXISTS "News comments viewable by everyone" ON public.news_comments;
 CREATE POLICY "News comments viewable by everyone" ON public.news_comments FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Authenticated users insert news comments" ON public.news_comments;
@@ -180,7 +172,7 @@ CREATE POLICY "Authenticated users insert news comments" ON public.news_comments
 DROP POLICY IF EXISTS "Users/Admins manage own news comments" ON public.news_comments;
 CREATE POLICY "Users/Admins manage own news comments" ON public.news_comments FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
--- 기존 테이블에 컬럼이 없는 경우 추가
+-- 기존 테이블에 컬럼이 없는 경우 추가 (데이터 유실 방지 로직)
 DO $$ 
 BEGIN 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='persona_memo') THEN
