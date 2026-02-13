@@ -70,13 +70,13 @@
         border-color: rgba(16, 185, 129, 0.6) !important;
       }
       
-      /* 마크다운 본문 스타일 강화 및 빗금(취소선) 현상 해결 */
+      /* 마크다운 본문 스타일 강화 및 빗금(취소선) 현상 완전 해결 */
       .prose * {
-        text-decoration: none !important; /* 기본적으로 모든 빗금 제거 */
+        text-decoration: none !important; /* 모든 요소의 텍스트 장식 제거 */
       }
       .prose del, .prose s {
-        text-decoration: line-through !important; /* 명시적 취소선만 허용 */
-        color: rgba(239, 68, 68, 0.5) !important; /* 취소선은 붉은 기가 돌게 처리 */
+        text-decoration: none !important; /* 취소선 태그가 있어도 선을 표시하지 않음 */
+        color: inherit !important; /* 색상도 변경하지 않음 */
       }
       .prose h1, .prose h2, .prose h3 {
         color: #fff !important;
