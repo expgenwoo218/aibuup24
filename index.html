@@ -69,6 +69,15 @@
       .glow-border:hover {
         border-color: rgba(16, 185, 129, 0.6) !important;
       }
+      
+      /* 마크다운 본문 스타일 강화 및 빗금(취소선) 현상 해결 */
+      .prose * {
+        text-decoration: none !important; /* 기본적으로 모든 빗금 제거 */
+      }
+      .prose del, .prose s {
+        text-decoration: line-through !important; /* 명시적 취소선만 허용 */
+        color: rgba(239, 68, 68, 0.5) !important; /* 취소선은 붉은 기가 돌게 처리 */
+      }
       .prose h1, .prose h2, .prose h3 {
         color: #fff !important;
         font-weight: 900 !important;
