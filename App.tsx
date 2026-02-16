@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import AboutUs from './pages/AboutUs';
 import AboutDetail from './pages/AboutDetail';
@@ -17,6 +17,7 @@ import Admin from './pages/Admin';
 import AdminUserDetail from './pages/AdminUserDetail';
 import News from './pages/News';
 import NewsDetail from './pages/NewsDetail';
+import Sitemap from './pages/Sitemap';
 import { supabase, isConfigured } from './lib/supabase';
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
@@ -67,7 +68,11 @@ const Navbar = () => {
               {profile.role}
             </div>
           )}
-          <Link to="/contact" className="text-gray-500 hover:text-white transition-colors text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Contact</Link>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link to="/contact" className="text-gray-500 hover:text-white transition-colors text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Contact</Link>
+            <div className="w-px h-2 bg-white/10" />
+            <Link to="/sitemap" className="text-gray-500 hover:text-emerald-400 transition-colors text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Sitemap</Link>
+          </div>
           {user ? (
             <div className="flex items-center gap-2 md:gap-4 shrink-0">
               <span className="hidden sm:block text-[10px] text-gray-500 font-bold uppercase">{profile?.nickname || user.email?.split('@')[0]}</span>
@@ -148,6 +153,9 @@ const App: React.FC = () => {
               <Route path="/register" element={<Register />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/admin/user/:userId" element={<AdminUserDetail />} />
+              <Route path="/sitemap" element={<Sitemap />} />
+              {/* 프리뷰 환경의 GUID 경로 에러를 잡기 위해 직접 Home을 렌더링하도록 변경 */}
+              <Route path="*" element={<Home />} />
             </Routes>
           </main>
           
