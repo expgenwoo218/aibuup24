@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import Home from './pages/Home';
 import AboutUs from './pages/AboutUs';
 import AboutDetail from './pages/AboutDetail';
@@ -44,7 +44,7 @@ const Navbar = () => {
   };
   
   const getLinkStyles = (path: string) => {
-    const isActive = path === '/' ? location.pathname === '/' : location.pathname.includes(path);
+    const isActive = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
     return `px-5 py-2 rounded-full border transition-all duration-300 whitespace-nowrap font-black text-[11px] md:text-[13px] uppercase tracking-wider ${
       isActive 
         ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/20' 
@@ -105,13 +105,11 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isConfigured) return;
 
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -127,7 +125,7 @@ const App: React.FC = () => {
 
   return (
     <UserContext.Provider value={{ user, profile, refreshProfile: () => user && fetchProfile(user.id) }}>
-      <HashRouter>
+      <BrowserRouter>
         <ScrollToTop />
         <div className="min-h-screen bg-black text-white selection:bg-emerald-500/30">
           <Navbar />
@@ -167,7 +165,7 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-      </HashRouter>
+      </BrowserRouter>
     </UserContext.Provider>
   );
 };
